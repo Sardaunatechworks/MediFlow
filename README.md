@@ -1,0 +1,956 @@
+
+# MediFlow
+
+**MediFlow** is an intelligent healthcare coordination platform designed to help healthcare facilities prioritize patients according to clinical urgency and help patients locate verified pharmacies where prescribed medicines are available.
+
+The platform connects the hospital care workflow with medicine access in one continuous system:
+
+**Patient Registration → Triage → Urgency Classification → Prioritized Queue → Consultation → Prescription → Medicine Search → Verified Pharmacy → Reservation**
+
+---
+
+## Overview
+
+Healthcare delivery often faces two major coordination challenges:
+
+1. Patients may not always be attended to according to the urgency of their condition.
+2. Patients may struggle to find pharmacies where prescribed medicines are currently available.
+
+MediFlow addresses both problems through a unified healthcare coordination system.
+
+The platform provides:
+
+- Clinical triage support
+- Patient priority classification
+- Live patient queue management
+- Clinician consultation workflow
+- Prescription management
+- Pharmacy inventory visibility
+- Medicine availability search
+- Pharmacy verification
+- Medicine reservation
+- Role-based dashboards
+- Audit and administrative controls
+
+MediFlow is designed as a **decision-support and coordination platform**, not as an autonomous diagnostic or prescribing system.
+
+---
+
+# Core Principle
+
+MediFlow does **not** diagnose patients or prescribe medicines independently.
+
+The clinical workflow follows this principle:
+
+**Healthcare professional assesses patient → MediFlow supports urgency prioritization → Clinician makes the final clinical decision → Clinician issues prescription → MediFlow locates pharmacies where the prescribed medicine is available.**
+
+The platform supports healthcare professionals rather than replacing them.
+
+---
+
+# Key Features
+
+## 1. Patient Registration
+
+Healthcare staff can register patients and create healthcare encounters.
+
+Captured information may include:
+
+- Full name
+- Age
+- Sex
+- Patient identifier
+- Contact details
+- Visit information
+- Presenting complaint
+
+---
+
+## 2. Clinical Triage
+
+Triage officers can record structured clinical observations including:
+
+- Blood pressure
+- Pulse rate
+- Respiratory rate
+- Oxygen saturation
+- Temperature
+- Presenting complaint
+- Symptoms
+- Clinical red-flag indicators
+
+The system evaluates the information using a configurable rule-based triage engine.
+
+---
+
+## 3. Urgency Classification
+
+Patients are categorized into three primary urgency levels:
+
+### Red
+Immediate or potentially life-threatening condition.
+
+### Yellow
+Urgent condition requiring timely clinical assessment.
+
+### Green
+Stable or non-urgent condition.
+
+The system recommends the urgency category, but authorized healthcare professionals retain final authority.
+
+---
+
+## 4. Live Patient Queue
+
+The patient queue is automatically ordered using:
+
+- Clinical urgency
+- Escalation status
+- Waiting time
+- Clinician overrides
+
+Critical patients are automatically prioritized.
+
+The system supports statuses such as:
+
+- Waiting
+- Escalated
+- In consultation
+- Under observation
+- Completed
+
+---
+
+## 5. Clinician Workspace
+
+Clinicians can:
+
+- View the live patient queue
+- Review triage history
+- View vital signs
+- Review urgency reasoning
+- Document clinical assessment
+- Record diagnosis or clinical impression
+- Record treatment or intervention
+- Update patient priority
+- Complete consultations
+- Issue prescriptions
+
+---
+
+## 6. Prescription Management
+
+Clinicians can create prescriptions linked directly to a patient encounter.
+
+Prescription items may contain:
+
+- Medicine name
+- Strength
+- Dosage form
+- Quantity
+- Instructions
+
+The platform does not independently recommend or prescribe medication.
+
+---
+
+## 7. Medicine Availability Search
+
+After a clinician issues a prescription, MediFlow can search participating pharmacy inventories.
+
+Search results may consider:
+
+- Exact medicine match
+- Strength
+- Dosage form
+- Reported stock availability
+- Inventory freshness
+- Pharmacy verification
+- Distance
+- Opening status
+- Price, where available
+
+---
+
+## 8. Verified Pharmacy Network
+
+Pharmacies can be onboarded and verified before appearing as trusted providers.
+
+Verification may include:
+
+- Pharmacy identity
+- Business information
+- Contact details
+- Operating location
+- Regulatory information
+- Verification status
+
+---
+
+## 9. Pharmacy Inventory Management
+
+Authorized pharmacy users can:
+
+- Add medicines
+- Update stock quantity
+- Mark medicines as available
+- Mark medicines as low stock
+- Mark medicines as unavailable
+- Track inventory freshness
+- Review medicine history
+
+Each stock record includes a last-updated timestamp to reduce stale availability information.
+
+---
+
+## 10. Medicine Reservation
+
+Patients or authorized users can reserve prescribed medicines before travelling to the pharmacy.
+
+Reservation statuses include:
+
+- Pending
+- Confirmed
+- Rejected
+- Expired
+- Fulfilled
+
+Pharmacy staff can confirm availability before collection.
+
+---
+
+# User Roles
+
+MediFlow currently supports **7 system roles**.
+
+## 1. Patient
+
+Patients can:
+
+- View their care journey
+- View triage status
+- View queue status
+- View prescriptions
+- Search medicine availability
+- Select verified pharmacies
+- Reserve medicines
+- Track reservation status
+- Manage profile information
+
+---
+
+## 2. Triage Officer / Nurse
+
+Triage officers can:
+
+- Register patients
+- Create encounters
+- Record vital signs
+- Record symptoms
+- Identify red flags
+- Submit triage assessment
+- Receive urgency recommendations
+- Escalate critical patients
+- Monitor the waiting queue
+
+They cannot prescribe medication.
+
+---
+
+## 3. Clinician / Doctor
+
+Clinicians can:
+
+- View prioritized patient queue
+- Review triage information
+- Attend to patients
+- Override urgency classifications
+- Record clinical findings
+- Record treatment
+- Issue prescriptions
+- Complete consultations
+- Review patient encounter history
+
+---
+
+## 4. Hospital Administrator
+
+Hospital administrators can:
+
+- Monitor hospital operations
+- Manage hospital users
+- Assign hospital roles
+- View patient flow metrics
+- View queue performance
+- Review operational activity
+- View audit history
+- Manage facility settings
+
+They do not make clinical decisions unless they separately hold a clinical role.
+
+---
+
+## 5. Pharmacy Administrator
+
+Pharmacy administrators can:
+
+- Manage pharmacy profile
+- Manage pharmacy inventory
+- Add and remove medicines
+- Manage pharmacy staff
+- View reservations
+- View analytics
+- Manage pharmacy settings
+- Review pharmacy activity logs
+
+---
+
+## 6. Pharmacy Staff
+
+Pharmacy staff have limited operational access.
+
+They can:
+
+- View inventory
+- Update medicine quantities
+- Update availability status
+- Process reservations
+- Confirm reservation requests
+- Reject unavailable reservations
+- Mark medicines as collected
+- View low-stock alerts
+
+They cannot:
+
+- Manage pharmacy staff
+- Change pharmacy ownership settings
+- Access platform administration
+- Modify system-wide configuration
+
+---
+
+## 7. Platform Administrator / Super Admin
+
+Platform administrators manage the overall MediFlow ecosystem.
+
+They can:
+
+- Manage healthcare facilities
+- Verify hospitals and pharmacies
+- Review organization applications
+- Manage system users
+- Review audit logs
+- Monitor security activity
+- Manage platform configuration
+- Suspend organizations or accounts
+- Review system-wide metrics
+
+---
+
+# System Workflow
+
+The core MediFlow workflow is:
+
+```text
+Patient Arrival
+      ↓
+Patient Registration
+      ↓
+Triage Assessment
+      ↓
+Clinical Urgency Recommendation
+      ↓
+RED / YELLOW / GREEN
+      ↓
+Prioritized Patient Queue
+      ↓
+Clinician Consultation
+      ↓
+Prescription
+      ↓
+Medicine Availability Search
+      ↓
+Verified Pharmacy Results
+      ↓
+Medicine Reservation
+      ↓
+Pharmacy Confirmation
+      ↓
+Medicine Collection
+````
+
+---
+
+# System Architecture
+
+MediFlow follows a modular web application architecture.
+
+```text
+                     ┌────────────────────┐
+                     │     Frontend       │
+                     │ Web / Responsive UI│
+                     └─────────┬──────────┘
+                               │
+                               ▼
+                     ┌────────────────────┐
+                     │      API Layer     │
+                     │ Auth + Validation  │
+                     └─────────┬──────────┘
+                               │
+        ┌──────────────────────┼──────────────────────┐
+        ▼                      ▼                      ▼
+┌───────────────┐     ┌─────────────────┐    ┌─────────────────┐
+│ Clinical      │     │ Pharmacy        │    │ Administration  │
+│ Coordination  │     │ Availability    │    │ & Security      │
+└───────┬───────┘     └────────┬────────┘    └────────┬────────┘
+        │                      │                      │
+        └──────────────────────┼──────────────────────┘
+                               ▼
+                     ┌────────────────────┐
+                     │ Relational Database│
+                     └────────────────────┘
+```
+
+---
+
+# Recommended Technology Stack
+
+The implementation can use the following stack:
+
+## Frontend
+
+* Next.js
+* React
+* TypeScript
+* Tailwind CSS
+* Responsive Web Design
+
+## Backend
+
+Possible options:
+
+* Node.js
+* Express.js
+
+or
+
+* NestJS
+
+or
+
+* Laravel / PHP
+
+The final implementation should use one consistent backend architecture.
+
+## Database
+
+* PostgreSQL
+
+## Authentication
+
+* Secure JWT or session-based authentication
+* Role-Based Access Control
+
+## Realtime Features
+
+Possible technologies:
+
+* WebSockets
+* Server-Sent Events
+* Managed realtime service
+
+## Deployment
+
+Possible deployment options:
+
+* Vercel
+* Render
+* Railway
+* VPS / Cloud infrastructure
+* Managed PostgreSQL service
+
+---
+
+# Suggested Database Entities
+
+Core database entities include:
+
+```text
+users
+roles
+facilities
+user_facilities
+patients
+encounters
+triage_assessments
+queue_events
+clinical_overrides
+prescriptions
+prescription_items
+medicines
+pharmacy_inventory
+reservations
+notifications
+audit_logs
+```
+
+---
+
+# Example API Structure
+
+## Authentication
+
+```http
+POST /auth/login
+POST /auth/logout
+POST /auth/refresh
+```
+
+## Patients
+
+```http
+POST /patients
+GET /patients/:id
+```
+
+## Encounters
+
+```http
+POST /encounters
+GET /encounters/:id
+PATCH /encounters/:id/status
+```
+
+## Triage
+
+```http
+POST /encounters/:id/triage
+GET /facilities/:id/queue
+POST /triage/:id/override
+```
+
+## Prescriptions
+
+```http
+POST /encounters/:id/prescriptions
+GET /prescriptions/:id
+```
+
+## Medicines
+
+```http
+GET /medicines/search
+```
+
+## Pharmacy Inventory
+
+```http
+GET /availability/search
+PUT /pharmacies/:id/inventory/:medicineId
+POST /pharmacies/:id/inventory
+```
+
+## Reservations
+
+```http
+POST /reservations
+GET /reservations/:id
+PATCH /reservations/:id
+```
+
+---
+
+# Clinical Triage Logic
+
+The competition MVP uses a rule-based clinical decision-support engine.
+
+Illustrative logic:
+
+```text
+IF critical red flag detected
+    priority = RED
+
+ELSE IF urgent threshold is met
+    priority = YELLOW
+
+ELSE
+    priority = GREEN
+```
+
+Examples of possible triage input factors include:
+
+* Breathing difficulty
+* Severe bleeding
+* Loss of consciousness
+* Seizure
+* Abnormal vital signs
+* Severe pain
+* Rapidly worsening condition
+
+Clinical rules must be reviewed by qualified healthcare professionals before real-world deployment.
+
+---
+
+# Queue Prioritization
+
+The live queue can use a scoring structure such as:
+
+```text
+Priority Score =
+Clinical Acuity
++ Escalation Weight
++ Waiting-Time Adjustment
+```
+
+Clinical urgency must always remain the dominant factor.
+
+Waiting time should never cause a stable patient to overtake a genuinely critical patient.
+
+---
+
+# Security
+
+Security is a core requirement of MediFlow.
+
+The platform should implement:
+
+* Role-Based Access Control
+* Secure authentication
+* Password hashing
+* HTTPS/TLS
+* Session management
+* Login throttling
+* Least-privilege permissions
+* Facility-level data isolation
+* Input validation
+* Protected API routes
+* Audit logs
+* Sensitive data protection
+* Secure environment variables
+* Encrypted backups
+
+---
+
+# Audit Logging
+
+Important system activities should be logged, including:
+
+* User login
+* Failed login attempts
+* Patient priority changes
+* Triage overrides
+* Prescription creation
+* Inventory updates
+* Reservation actions
+* User account changes
+* Organization verification
+* Administrative actions
+
+---
+
+# Clinical Safety
+
+MediFlow is designed as a healthcare coordination and decision-support system.
+
+It must not be represented as:
+
+* An autonomous doctor
+* A diagnostic replacement
+* An automated prescribing system
+* An automatic medication substitution system
+
+Final clinical decisions remain the responsibility of qualified healthcare professionals.
+
+---
+
+# UI/UX Design
+
+The complete MediFlow UI/UX is designed in Figma.
+
+The design includes dedicated interfaces for all seven roles:
+
+```text
+Patient
+Triage Officer
+Clinician
+Hospital Admin
+Pharmacy Admin
+Pharmacy Staff
+Platform Admin
+```
+
+Each role has its own navigation, actions, permissions, and dashboard experience.
+
+### Figma Design
+
+[https://www.figma.com/design/9QJCWCNgb0bV4HLOxy1MJu](https://www.figma.com/design/9QJCWCNgb0bV4HLOxy1MJu)
+
+---
+
+# Repository Structure
+
+A recommended project structure is:
+
+```text
+mediflow/
+│
+├── frontend/
+│   ├── app/
+│   ├── components/
+│   ├── features/
+│   ├── hooks/
+│   ├── services/
+│   ├── types/
+│   └── utils/
+│
+├── backend/
+│   ├── src/
+│   │   ├── auth/
+│   │   ├── users/
+│   │   ├── facilities/
+│   │   ├── patients/
+│   │   ├── encounters/
+│   │   ├── triage/
+│   │   ├── prescriptions/
+│   │   ├── medicines/
+│   │   ├── pharmacy/
+│   │   ├── reservations/
+│   │   ├── notifications/
+│   │   └── audit/
+│   │
+│   └── tests/
+│
+├── docs/
+│   ├── technical-paper/
+│   ├── architecture/
+│   ├── api/
+│   └── screenshots/
+│
+├── README.md
+├── .env.example
+└── LICENSE
+```
+
+---
+
+# Git Workflow
+
+Recommended branches:
+
+```text
+main
+develop
+feature/*
+```
+
+Example feature branches:
+
+```text
+feature/triage-engine
+feature/patient-registration
+feature/live-queue
+feature/clinician-workspace
+feature/prescription-flow
+feature/pharmacy-inventory
+feature/medicine-search
+feature/reservation-flow
+feature/auth-rbac
+```
+
+Development flow:
+
+```text
+Feature Branch
+      ↓
+Pull Request
+      ↓
+Code Review
+      ↓
+Develop
+      ↓
+Integration Testing
+      ↓
+Main
+      ↓
+Production
+```
+
+Direct pushes to `main` should be avoided.
+
+---
+
+# Development Team
+
+## Muhammad Auwal Abubakar
+
+**Senior Software Engineer / Technical Lead**
+
+Responsibilities:
+
+* System architecture
+* API standards
+* Integration
+* Code review
+* Security review
+* Database consistency
+* Deployment
+* Final system validation
+
+---
+
+## Jibril Raji Qasim
+
+**Clinical Workflow and Triage Engineer**
+
+Responsibilities:
+
+* Patient registration
+* Encounters
+* Triage assessment
+* Urgency classification
+* Live queue
+* Clinical escalation
+* Priority override
+
+---
+
+## Khalid Murtala
+
+**Pharmacy and Medicine Availability Engineer**
+
+Responsibilities:
+
+* Medicine catalogue
+* Pharmacy inventory
+* Medicine availability search
+* Pharmacy matching
+* Prescription integration
+* Reservation flow
+
+---
+
+## Ibrahim Sabour
+
+**Frontend / UI Implementation Engineer**
+
+Responsibilities:
+
+* UI implementation
+* Role-specific dashboards
+* Responsive design
+* Frontend integration
+* Reusable components
+* User experience
+* API integration
+
+---
+
+# MVP Definition
+
+The MVP is considered successful when the following flow works completely:
+
+```text
+Register Patient
+      ↓
+Perform Triage
+      ↓
+Classify Urgency
+      ↓
+Prioritize Queue
+      ↓
+Clinician Consultation
+      ↓
+Issue Prescription
+      ↓
+Search Medicine Availability
+      ↓
+Find Verified Pharmacy
+      ↓
+Reserve Medicine
+      ↓
+Confirm Reservation
+```
+
+The complete demo must work through the UI without requiring direct database editing.
+
+---
+
+# Testing
+
+Testing should include:
+
+* Unit testing
+* API testing
+* Authentication testing
+* RBAC testing
+* Triage rule testing
+* Queue ordering testing
+* Prescription workflow testing
+* Inventory testing
+* Reservation testing
+* Integration testing
+* Security testing
+* Responsive UI testing
+* End-to-end testing
+
+Synthetic patient data should be used for competition demonstrations.
+
+---
+
+# Future Improvements
+
+Possible future versions of MediFlow may include:
+
+* Hospital EMR integration
+* Pharmacy POS integration
+* Ambulance coordination
+* Hospital referral management
+* Bed availability tracking
+* Predictive medicine demand
+* Stock shortage forecasting
+* SMS and USSD support
+* Multilingual interfaces
+* Barcode medicine inventory
+* Advanced analytics
+* Clinical deterioration monitoring
+* Health data interoperability
+
+---
+
+# Project Context
+
+MediFlow is being developed for the:
+
+**NACOS National Build Challenge 2026**
+
+The project focuses on building a practical technology solution for healthcare coordination and medicine access.
+
+---
+
+# Disclaimer
+
+MediFlow is currently a prototype and competition project.
+
+It is not a certified medical device and should not be used to replace professional medical judgement, diagnosis, treatment, or prescribing decisions without appropriate clinical validation, regulatory review, and production-grade security assessment.
+
+---
+
+# License
+
+License information will be added based on the team's final open-source or proprietary distribution decision.
+
+---
+
+# Contact
+
+**MediFlow Development Team**
+
+Technical Lead:
+**Muhammad Auwal Abubakar**
+
+NACOS National Build Challenge 2026
+
+```
+
+I’d use this as the **main repository README**, because it explains the product to judges, developers, contributors, and anyone opening the GitHub repo without making it unnecessarily academic.
+```
