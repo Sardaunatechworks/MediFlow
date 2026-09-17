@@ -59,6 +59,106 @@ model Facility {
   pharmacyProfile    PharmacyProfile?
   inventory          PharmacyInventory[]
   reservations       Reservation[]
+  encounters         Encounter[]
+}
+
+enum EncounterStatus {
+  WAITING
+  IN_CONSULTATION
+  ESCALATED
+  COMPLETED
+  CANCELLED
+}
+
+enum UrgencyLevel {
+  RED
+  YELLOW
+  GREEN
+}
+
+enum Gender {
+  MALE
+  FEMALE
+  OTHER
+}
+
+model Patient {
+  id                    String      @id @default(uuid())
+  patientIdentifier     String      @unique
+  firstName             String
+  lastName              String
+  dateOfBirth           DateTime?
+  age                   Int?
+  gender                Gender
+  phone                 String?
+  email                 String?
+  address               String?
+  emergencyContactName  String?
+  emergencyContactPhone String?
+  createdAt             DateTime    @default(now())
+  updatedAt             DateTime    @updatedAt
+  encounters            Encounter[]
+}
+
+model Encounter {
+  id                  String             @id @default(uuid())
+  patientId           String
+  facilityId          String
+  status              EncounterStatus    @default(WAITING)
+  priority            UrgencyLevel?
+  priorityScore       Int                @default(0)
+  presentingComplaint String
+  startedAt           DateTime           @default(now())
+  endedAt             DateTime?
+  createdAt           DateTime           @default(now())
+  updatedAt           DateTime           @updatedAt
+  patient             Patient            @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  facility            Facility           @relation(fields: [facilityId], references: [id], onDelete: Cascade)
+  triageAssessments   TriageAssessment[]
+  queueEvents         QueueEvent[]
+
+  @@index([facilityId, status])
+}
+
+model TriageAssessment {
+  id                 String             @id @default(uuid())
+  encounterId        String
+  assessedBy         String?
+  temperature        Float
+  systolicBp         Int
+  diastolicBp        Int
+  pulseRate          Int
+  respiratoryRate    Int
+  oxygenSaturation   Float?
+  redFlags           Json?
+  symptoms           Json?
+  recommendedUrgency UrgencyLevel
+  reasoning          Json?
+  finalUrgency       UrgencyLevel
+  isCriticalAlert    Boolean            @default(false)
+  assessedAt         DateTime           @default(now())
+  encounter          Encounter          @relation(fields: [encounterId], references: [id], onDelete: Cascade)
+  overrides          ClinicalOverride[]
+}
+
+model ClinicalOverride {
+  id                 String           @id @default(uuid())
+  triageAssessmentId String
+  overriddenBy       String
+  previousUrgency    UrgencyLevel
+  newUrgency         UrgencyLevel
+  overrideReason     String
+  overriddenAt       DateTime         @default(now())
+  triageAssessment   TriageAssessment @relation(fields: [triageAssessmentId], references: [id], onDelete: Cascade)
+}
+
+model QueueEvent {
+  id          String    @id @default(uuid())
+  encounterId String
+  eventType   String
+  details     Json?
+  timestamp   DateTime  @default(now())
+  encounter   Encounter @relation(fields: [encounterId], references: [id], onDelete: Cascade)
 }
 
 model PharmacyProfile {

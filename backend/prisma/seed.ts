@@ -6,6 +6,11 @@ async function main() {
   console.log('Seeding MediFlow database...');
 
   // Clean existing data
+  await prisma.clinicalOverride.deleteMany();
+  await prisma.triageAssessment.deleteMany();
+  await prisma.queueEvent.deleteMany();
+  await prisma.encounter.deleteMany();
+  await prisma.patient.deleteMany();
   await prisma.reservation.deleteMany();
   await prisma.pharmacyInventory.deleteMany();
   await prisma.pharmacyProfile.deleteMany();
@@ -317,6 +322,169 @@ async function main() {
   }
   console.log(`Created ${inventoryEntries.length} inventory records`);
 
+  // Seed Hospital Facility
+  const hospital = await prisma.facility.create({
+    data: {
+      name: 'National Hospital Abuja',
+      type: FacilityType.HOSPITAL,
+      address: 'Plot 132 Central Business District, Abuja, FCT',
+      phone: '+2348039991122',
+      email: 'info@nationalhospital.gov.ng',
+      verificationStatus: VerificationStatus.VERIFIED,
+      status: FacilityStatus.ACTIVE,
+    },
+  });
+  console.log(`Created hospital facility: ${hospital.name} (${hospital.id})`);
+
+  // Seed 3 Demo Patients for Clinical Workflow & Queue demonstration:
+  // Patient 1 (Stable - GREEN, arrived 75 mins ago)
+  const patientGreen = await prisma.patient.create({
+    data: {
+      patientIdentifier: 'MF-PT-100001',
+      firstName: 'Fatima',
+      lastName: 'Bello',
+      age: 28,
+      gender: 'FEMALE',
+      phone: '+2348011223344',
+      email: 'fatima.bello@example.com',
+      address: 'Garki 2, Abuja',
+    },
+  });
+
+  const encGreen = await prisma.encounter.create({
+    data: {
+      patientId: patientGreen.id,
+      facilityId: hospital.id,
+      presentingComplaint: 'Mild tension headache and nasal congestion',
+      status: 'WAITING',
+      priority: 'GREEN',
+      priorityScore: 100,
+      startedAt: new Date(now.getTime() - 75 * 60 * 1000),
+    },
+  });
+
+  await prisma.triageAssessment.create({
+    data: {
+      encounterId: encGreen.id,
+      assessedBy: 'Nurse Amina',
+      temperature: 36.8,
+      systolicBp: 118,
+      diastolicBp: 78,
+      pulseRate: 72,
+      respiratoryRate: 16,
+      oxygenSaturation: 98,
+      recommendedUrgency: 'GREEN',
+      finalUrgency: 'GREEN',
+      reasoning: ['All measured vital signs are within normal clinical thresholds with no critical red flags'],
+      isCriticalAlert: false,
+    },
+  });
+
+  // Patient 2 (Urgent - YELLOW, arrived 35 mins ago)
+  const patientYellow = await prisma.patient.create({
+    data: {
+      patientIdentifier: 'MF-PT-100002',
+      firstName: 'Emeka',
+      lastName: 'Okonkwo',
+      age: 36,
+      gender: 'MALE',
+      phone: '+2348055667788',
+      email: 'emeka.okonkwo@example.com',
+      address: 'Wuse Zone 4, Abuja',
+    },
+  });
+
+  const encYellow = await prisma.encounter.create({
+    data: {
+      patientId: patientYellow.id,
+      facilityId: hospital.id,
+      presentingComplaint: 'High fever, rigors, and moderate abdominal cramps',
+      status: 'WAITING',
+      priority: 'YELLOW',
+      priorityScore: 10000,
+      startedAt: new Date(now.getTime() - 35 * 60 * 1000),
+    },
+  });
+
+  await prisma.triageAssessment.create({
+    data: {
+      encounterId: encYellow.id,
+      assessedBy: 'Nurse Amina',
+      temperature: 39.2,
+      systolicBp: 132,
+      diastolicBp: 86,
+      pulseRate: 108,
+      respiratoryRate: 22,
+      oxygenSaturation: 94,
+      recommendedUrgency: 'YELLOW',
+      finalUrgency: 'YELLOW',
+      reasoning: [
+        'SpO2 is 94% (moderate hypoxemia 90-94%)',
+        'Respiratory rate is 22/min (tachypnea 21-30)',
+        'Pulse rate is 108 bpm (tachycardia 101-130 bpm)',
+        'Temperature is 39.2°C (high fever >= 38.5°C)',
+      ],
+      isCriticalAlert: false,
+    },
+  });
+
+  // Patient 3 (Critical - RED, arrived 8 mins ago)
+  const patientRed = await prisma.patient.create({
+    data: {
+      patientIdentifier: 'MF-PT-100003',
+      firstName: 'Musa',
+      lastName: 'Danladi',
+      age: 62,
+      gender: 'MALE',
+      phone: '+2348099887766',
+      email: 'musa.danladi@example.com',
+      address: 'Maitama, Abuja',
+    },
+  });
+
+  const encRed = await prisma.encounter.create({
+    data: {
+      patientId: patientRed.id,
+      facilityId: hospital.id,
+      presentingComplaint: 'Crushing retrosternal chest pain and severe dyspnea',
+      status: 'ESCALATED',
+      priority: 'RED',
+      priorityScore: 1000000,
+      startedAt: new Date(now.getTime() - 8 * 60 * 1000),
+    },
+  });
+
+  await prisma.triageAssessment.create({
+    data: {
+      encounterId: encRed.id,
+      assessedBy: 'Nurse Amina',
+      temperature: 37.1,
+      systolicBp: 84,
+      diastolicBp: 52,
+      pulseRate: 138,
+      respiratoryRate: 34,
+      oxygenSaturation: 86,
+      redFlags: {
+        severeRespiratoryDistress: true,
+        severeChestPain: true,
+        shockSigns: true,
+      },
+      recommendedUrgency: 'RED',
+      finalUrgency: 'RED',
+      reasoning: [
+        'Critical red-flag detected: Severe Respiratory Distress',
+        'Critical red-flag detected: Severe Chest Pain',
+        'Critical red-flag detected: Shock Signs',
+        'SpO2 is 86% (severe hypoxemia < 90%)',
+        'Respiratory rate is 34/min (severe tachypnea > 30)',
+        'Pulse rate is 138 bpm (severe tachycardia > 130 bpm)',
+        'Systolic BP is 84 mmHg (severe hypotension / shock < 90 mmHg)',
+      ],
+      isCriticalAlert: true,
+    },
+  });
+
+  console.log('Created 3 demo clinical patients, encounters, and triages (Red, Yellow, Green)');
   console.log('Seeding completed successfully');
 }
 
