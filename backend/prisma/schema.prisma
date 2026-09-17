@@ -1,0 +1,118 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum FacilityType {
+  HOSPITAL
+  CLINIC
+  PHARMACY
+}
+
+enum FacilityStatus {
+  ACTIVE
+  SUSPENDED
+  PENDING_VERIFICATION
+}
+
+enum VerificationStatus {
+  UNVERIFIED
+  VERIFIED
+  REJECTED
+}
+
+enum MedicineStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum InventoryStatus {
+  AVAILABLE
+  LOW_STOCK
+  OUT_OF_STOCK
+}
+
+enum ReservationStatus {
+  PENDING
+  CONFIRMED
+  REJECTED
+  EXPIRED
+  FULFILLED
+  CANCELLED
+}
+
+model Facility {
+  id                 String              @id @default(uuid())
+  name               String
+  type               FacilityType
+  address            String
+  phone              String?
+  email              String?
+  verificationStatus VerificationStatus  @default(UNVERIFIED)
+  status             FacilityStatus      @default(PENDING_VERIFICATION)
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+  pharmacyProfile    PharmacyProfile?
+  inventory          PharmacyInventory[]
+  reservations       Reservation[]
+}
+
+model PharmacyProfile {
+  id                 String   @id @default(uuid())
+  facilityId         String   @unique
+  licenceNumber      String?
+  operatingHours     String?
+  reservationEnabled Boolean  @default(true)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+  facility           Facility @relation(fields: [facilityId], references: [id], onDelete: Cascade)
+}
+
+model Medicine {
+  id           String              @id @default(uuid())
+  genericName  String
+  brandName    String?
+  strength     String
+  dosageForm   String
+  packageSize  String?
+  manufacturer String?
+  status       MedicineStatus      @default(ACTIVE)
+  createdAt    DateTime            @default(now())
+  updatedAt    DateTime            @updatedAt
+  inventory    PharmacyInventory[]
+  Reservation  Reservation[]
+}
+
+model PharmacyInventory {
+  id            String          @id @default(uuid())
+  facilityId    String
+  medicineId    String
+  quantity      Int             @default(0)
+  status        InventoryStatus @default(OUT_OF_STOCK)
+  price         Decimal?
+  lastUpdatedAt DateTime        @default(now())
+  updatedBy     String?
+  facility      Facility        @relation(fields: [facilityId], references: [id], onDelete: Cascade)
+  medicine      Medicine        @relation(fields: [medicineId], references: [id], onDelete: Cascade)
+
+  @@unique([facilityId, medicineId])
+}
+
+model Reservation {
+  id                 String            @id @default(uuid())
+  prescriptionId     String
+  prescriptionItemId String
+  facilityId         String
+  medicineId         String
+  patientId          String
+  status             ReservationStatus @default(PENDING)
+  requestedAt        DateTime          @default(now())
+  expiresAt          DateTime?
+  updatedAt          DateTime          @updatedAt
+  facility           Facility          @relation(fields: [facilityId], references: [id], onDelete: Cascade)
+  medicine           Medicine          @relation(fields: [medicineId], references: [id], onDelete: Cascade)
+}
