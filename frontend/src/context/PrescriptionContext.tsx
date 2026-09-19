@@ -2,6 +2,7 @@
 
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { ClientPrescription, ClientPrescriptionItem, ReservationStatus } from '@/types/domain';
+import { prescriptionApi } from '@/lib/api';
 
 interface PrescriptionContextType {
   prescriptions: ClientPrescription[];
@@ -28,6 +29,7 @@ interface PrescriptionContextType {
   updateReservationStatus: (reservationId: string, newStatus: ReservationStatus) => void;
   knownReservationIds: string[];
   recordReservationId: (reservationId: string) => void;
+  refreshFromBackend: (patientId?: string) => Promise<void>;
 }
 
 const PrescriptionContext = createContext<PrescriptionContextType | undefined>(undefined);
@@ -36,7 +38,7 @@ function generateMvpUuid(prefix = 'mvp-px'): string {
   return `${prefix}-${Math.random().toString(36).substring(2, 8)}-${Date.now().toString(36)}`;
 }
 
-// Default Seeded Prescriptions for testing & hackathon demonstration
+// Default Seeded Prescriptions for fallback demonstration
 const SEEDED_DEMO_PRESCRIPTIONS: ClientPrescription[] = [
   {
     id: 'px-demo-seed-001',
@@ -105,8 +107,8 @@ const SEEDED_DEMO_PRESCRIPTIONS: ClientPrescription[] = [
         medicineName: 'Paracetamol',
         strength: '500mg',
         dosageForm: 'Tablet',
-        quantity: 20,
-        instructions: 'Take 1 to 2 tablets every 8 hours as needed for headache',
+        quantity: 10,
+        instructions: 'Take 2 tablets when needed for headache',
       },
     ],
   },
@@ -116,6 +118,47 @@ export function PrescriptionProvider({ children }: { children: React.ReactNode }
   const [prescriptions, setPrescriptions] = useState<ClientPrescription[]>(SEEDED_DEMO_PRESCRIPTIONS);
   const [activePrescription, setActivePrescription] = useState<ClientPrescription | null>(SEEDED_DEMO_PRESCRIPTIONS[0]);
   const [knownReservationIds, setKnownReservationIds] = useState<string[]>([]);
+
+  const refreshFromBackend = async (patientId?: string) => {
+    try {
+      if (patientId) {
+        const backendPrescriptions = await prescriptionApi.getByPatient(patientId);
+        if (Array.isArray(backendPrescriptions) && backendPrescriptions.length > 0) {
+          const mapped: ClientPrescription[] = backendPrescriptions.map((bp) => ({
+            id: bp.id,
+            encounterId: bp.encounterId,
+            patientId: bp.patientId,
+            patientName: bp.patient ? `${bp.patient.firstName} ${bp.patient.lastName}` : 'Patient',
+            clinicianName: bp.clinician?.name || 'Dr. Auwal',
+            issuedAt: bp.issuedAt,
+            diagnosisNotes: bp.diagnosisNotes,
+            status: bp.status,
+            items: (bp.items || []).map((item: any) => ({
+              id: item.id,
+              medicineId: item.medicineId,
+              medicineName: item.medicine?.genericName || 'Medicine',
+              strength: item.medicine?.strength || '',
+              dosageForm: item.medicine?.dosageForm || 'Tablet',
+              quantity: item.quantity,
+              instructions: item.instructions,
+              dosageFrequency: item.dosageFrequency,
+              reservationId: item.reservations?.[0]?.id,
+              reservationStatus: item.reservations?.[0]?.status,
+              reservedFacilityId: item.reservations?.[0]?.facilityId,
+              reservedFacilityName: item.reservations?.[0]?.facility?.name,
+              reservedAt: item.reservations?.[0]?.requestedAt,
+            })),
+          }));
+          setPrescriptions((prev) => {
+            const filtered = prev.filter((p) => p.patientId !== patientId);
+            return [...mapped, ...filtered];
+          });
+        }
+      }
+    } catch {
+      // Ignore offline errors
+    }
+  };
 
   useEffect(() => {
     try {
@@ -127,7 +170,6 @@ export function PrescriptionProvider({ children }: { children: React.ReactNode }
           setActivePrescription(parsed[0]);
         }
       } else {
-        // If empty in session storage, persist default seeded demonstration prescriptions
         sessionStorage.setItem('mediflow_mvp_prescriptions', JSON.stringify(SEEDED_DEMO_PRESCRIPTIONS));
       }
 
@@ -164,8 +206,9 @@ export function PrescriptionProvider({ children }: { children: React.ReactNode }
     items: Omit<ClientPrescriptionItem, 'id'>[],
     diagnosisNotes?: string
   ): ClientPrescription => {
+    const tempId = generateMvpUuid('px');
     const newPrescription: ClientPrescription = {
-      id: generateMvpUuid('px'),
+      id: tempId,
       encounterId,
       patientId,
       patientName,
@@ -179,6 +222,7 @@ export function PrescriptionProvider({ children }: { children: React.ReactNode }
       })),
     };
 
+    // Update client state immediately for responsive UI
     setPrescriptions((prev) => {
       const updated = [newPrescription, ...prev];
       try {
@@ -188,8 +232,48 @@ export function PrescriptionProvider({ children }: { children: React.ReactNode }
       }
       return updated;
     });
-
     setActivePrescription(newPrescription);
+
+    // Asynchronously synchronize with backend database
+    prescriptionApi
+      .create({
+        encounterId,
+        patientId,
+        diagnosisNotes,
+        items: items.map((it) => ({
+          medicineId: it.medicineId,
+          quantity: it.quantity,
+          instructions: it.instructions,
+          dosageFrequency: it.dosageFrequency,
+        })),
+      })
+      .then((createdBackend) => {
+        if (createdBackend?.id) {
+          setPrescriptions((prev) => {
+            const updated = prev.map((p) => {
+              if (p.id !== tempId) return p;
+              return {
+                ...p,
+                id: createdBackend.id,
+                items: p.items.map((it, idx) => {
+                  const backendItem = createdBackend.items?.[idx];
+                  return backendItem ? { ...it, id: backendItem.id } : it;
+                }),
+              };
+            });
+            try {
+              sessionStorage.setItem('mediflow_mvp_prescriptions', JSON.stringify(updated));
+            } catch {
+              // Ignored
+            }
+            return updated;
+          });
+        }
+      })
+      .catch((err) => {
+        console.warn('Backend prescription sync deferred/failed:', err);
+      });
+
     return newPrescription;
   };
 
@@ -277,6 +361,7 @@ export function PrescriptionProvider({ children }: { children: React.ReactNode }
         updateReservationStatus,
         knownReservationIds,
         recordReservationId,
+        refreshFromBackend,
       }}
     >
       {children}

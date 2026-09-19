@@ -23,6 +23,7 @@ import {
   PharmacyInventory,
   Reservation,
   Facility,
+  AuditLog,
 } from '@/types/domain';
 
 export class ApiError extends Error {
@@ -44,9 +45,24 @@ async function request<T>(
   options: RequestInit = {}
 ): Promise<T> {
   const url = `${API_BASE_URL}${endpoint.startsWith('/') ? endpoint : `/${endpoint}`}`;
+  
+  // Attach JWT Bearer token if present
+  let authHeader: Record<string, string> = {};
+  if (typeof window !== 'undefined') {
+    try {
+      const token = localStorage.getItem('mediflow_auth_token');
+      if (token) {
+        authHeader = { Authorization: `Bearer ${token}` };
+      }
+    } catch {
+      // Ignore storage access errors
+    }
+  }
+
   const headers = {
     'Content-Type': 'application/json',
     Accept: 'application/json',
+    ...authHeader,
     ...options.headers,
   };
 
@@ -99,6 +115,30 @@ async function request<T>(
 // ============================================================
 // Strongly Typed Domain API Services
 // ============================================================
+
+export const authApi = {
+  async login(email: string, password?: string) {
+    return request<{
+      accessToken: string;
+      user: {
+        id: string;
+        email: string;
+        name: string;
+        role: string;
+        title?: string;
+        facilityId?: string;
+        facility?: Facility;
+      };
+    }>('/auth/login', {
+      method: 'POST',
+      body: JSON.stringify({ email, password: password || 'Password123!' }),
+    });
+  },
+
+  async getMe() {
+    return request<any>('/auth/me');
+  },
+};
 
 export const patientApi = {
   async create(dto: CreatePatientDto): Promise<Patient> {
@@ -160,6 +200,37 @@ export const queueApi = {
   },
 };
 
+export const prescriptionApi = {
+  async create(dto: {
+    encounterId: string;
+    patientId: string;
+    diagnosisNotes?: string;
+    items: {
+      medicineId: string;
+      quantity: number;
+      instructions: string;
+      dosageFrequency?: string;
+    }[];
+  }) {
+    return request<any>('/prescriptions', {
+      method: 'POST',
+      body: JSON.stringify(dto),
+    });
+  },
+
+  async getById(id: string) {
+    return request<any>(`/prescriptions/${id}`);
+  },
+
+  async getByPatient(patientId: string) {
+    return request<any[]>(`/prescriptions/patient/${patientId}`);
+  },
+
+  async getByEncounter(encounterId: string) {
+    return request<any[]>(`/prescriptions/encounter/${encounterId}`);
+  },
+};
+
 export const medicineApi = {
   async search(query: SearchMedicineDto = {}): Promise<Medicine[]> {
     const params = new URLSearchParams();
@@ -212,6 +283,52 @@ export const reservationApi = {
 
   async getById(id: string): Promise<Reservation> {
     return request<Reservation>(`/reservations/${id}`);
+  },
+
+  async list(params: { facilityId?: string; patientId?: string; status?: string } = {}): Promise<Reservation[]> {
+    const qs = new URLSearchParams();
+    if (params.facilityId) qs.append('facilityId', params.facilityId);
+    if (params.patientId) qs.append('patientId', params.patientId);
+    if (params.status) qs.append('status', params.status);
+    const queryString = qs.toString();
+    return request<Reservation[]>(`/reservations${queryString ? `?${queryString}` : ''}`);
+  },
+};
+
+export const facilityApi = {
+  async list(params: { type?: string; verificationStatus?: string } = {}): Promise<Facility[]> {
+    const qs = new URLSearchParams();
+    if (params.type) qs.append('type', params.type);
+    if (params.verificationStatus) qs.append('verificationStatus', params.verificationStatus);
+    const queryString = qs.toString();
+    return request<Facility[]>(`/facilities${queryString ? `?${queryString}` : ''}`);
+  },
+
+  async getById(id: string): Promise<Facility> {
+    return request<Facility>(`/facilities/${id}`);
+  },
+
+  async updateVerification(id: string, verificationStatus: string): Promise<Facility> {
+    return request<Facility>(`/facilities/${id}/verification`, {
+      method: 'PATCH',
+      body: JSON.stringify({ verificationStatus }),
+    });
+  },
+
+  async getAnalytics(id: string): Promise<any> {
+    return request<any>(`/facilities/${id}/analytics`);
+  },
+};
+
+export const auditApi = {
+  async list(params: { action?: string; entityType?: string; facilityId?: string; limit?: number } = {}): Promise<AuditLog[]> {
+    const qs = new URLSearchParams();
+    if (params.action) qs.append('action', params.action);
+    if (params.entityType) qs.append('entityType', params.entityType);
+    if (params.facilityId) qs.append('facilityId', params.facilityId);
+    if (params.limit) qs.append('limit', params.limit.toString());
+    const queryString = qs.toString();
+    return request<AuditLog[]>(`/audit-logs${queryString ? `?${queryString}` : ''}`);
   },
 };
 

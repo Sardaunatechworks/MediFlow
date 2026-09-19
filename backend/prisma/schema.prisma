@@ -7,6 +7,16 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+enum UserRole {
+  PATIENT
+  TRIAGE_OFFICER
+  CLINICIAN
+  HOSPITAL_ADMIN
+  PHARMACY_ADMIN
+  PHARMACY_STAFF
+  PLATFORM_ADMIN
+}
+
 enum FacilityType {
   HOSPITAL
   CLINIC
@@ -45,23 +55,6 @@ enum ReservationStatus {
   CANCELLED
 }
 
-model Facility {
-  id                 String              @id @default(uuid())
-  name               String
-  type               FacilityType
-  address            String
-  phone              String?
-  email              String?
-  verificationStatus VerificationStatus  @default(UNVERIFIED)
-  status             FacilityStatus      @default(PENDING_VERIFICATION)
-  createdAt          DateTime            @default(now())
-  updatedAt          DateTime            @updatedAt
-  pharmacyProfile    PharmacyProfile?
-  inventory          PharmacyInventory[]
-  reservations       Reservation[]
-  encounters         Encounter[]
-}
-
 enum EncounterStatus {
   WAITING
   IN_CONSULTATION
@@ -82,9 +75,62 @@ enum Gender {
   OTHER
 }
 
+enum PrescriptionStatus {
+  ISSUED
+  DISPENSED
+  CANCELLED
+}
+
+enum PrescriptionItemStatus {
+  PENDING
+  RESERVED
+  DISPENSED
+  CANCELLED
+}
+
+model User {
+  id            String         @id @default(uuid())
+  email         String         @unique
+  password      String
+  name          String
+  role          UserRole
+  title         String?
+  facilityId    String?
+  phone         String?
+  isActive      Boolean        @default(true)
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  facility      Facility?      @relation(fields: [facilityId], references: [id], onDelete: SetNull)
+  prescriptions Prescription[] @relation("ClinicianPrescriptions")
+  auditLogs     AuditLog[]
+  notifications Notification[]
+
+  @@index([role])
+  @@index([facilityId])
+}
+
+model Facility {
+  id                 String              @id @default(uuid())
+  name               String
+  type               FacilityType
+  address            String
+  phone              String?
+  email              String?
+  verificationStatus VerificationStatus  @default(UNVERIFIED)
+  status             FacilityStatus      @default(PENDING_VERIFICATION)
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+  pharmacyProfile    PharmacyProfile?
+  inventory          PharmacyInventory[]
+  reservations       Reservation[]
+  encounters         Encounter[]
+  users              User[]
+  auditLogs          AuditLog[]
+}
+
 model Patient {
-  id                    String      @id @default(uuid())
-  patientIdentifier     String      @unique
+  id                    String         @id @default(uuid())
+  patientIdentifier     String         @unique
   firstName             String
   lastName              String
   dateOfBirth           DateTime?
@@ -95,9 +141,11 @@ model Patient {
   address               String?
   emergencyContactName  String?
   emergencyContactPhone String?
-  createdAt             DateTime    @default(now())
-  updatedAt             DateTime    @updatedAt
+  createdAt             DateTime       @default(now())
+  updatedAt             DateTime       @updatedAt
   encounters            Encounter[]
+  prescriptions         Prescription[]
+  reservations          Reservation[]
 }
 
 model Encounter {
@@ -116,6 +164,7 @@ model Encounter {
   facility            Facility           @relation(fields: [facilityId], references: [id], onDelete: Cascade)
   triageAssessments   TriageAssessment[]
   queueEvents         QueueEvent[]
+  prescriptions       Prescription[]
 
   @@index([facilityId, status])
 }
@@ -173,18 +222,19 @@ model PharmacyProfile {
 }
 
 model Medicine {
-  id           String              @id @default(uuid())
-  genericName  String
-  brandName    String?
-  strength     String
-  dosageForm   String
-  packageSize  String?
-  manufacturer String?
-  status       MedicineStatus      @default(ACTIVE)
-  createdAt    DateTime            @default(now())
-  updatedAt    DateTime            @updatedAt
-  inventory    PharmacyInventory[]
-  Reservation  Reservation[]
+  id                String              @id @default(uuid())
+  genericName       String
+  brandName         String?
+  strength          String
+  dosageForm        String
+  packageSize       String?
+  manufacturer      String?
+  status            MedicineStatus      @default(ACTIVE)
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+  inventory         PharmacyInventory[]
+  reservations      Reservation[]
+  prescriptionItems PrescriptionItem[]
 }
 
 model PharmacyInventory {
@@ -202,10 +252,48 @@ model PharmacyInventory {
   @@unique([facilityId, medicineId])
 }
 
+model Prescription {
+  id             String             @id @default(uuid())
+  encounterId    String
+  patientId      String
+  clinicianId    String
+  diagnosisNotes String?
+  status         PrescriptionStatus @default(ISSUED)
+  issuedAt       DateTime           @default(now())
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
+  encounter      Encounter          @relation(fields: [encounterId], references: [id], onDelete: Cascade)
+  patient        Patient            @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  clinician      User               @relation("ClinicianPrescriptions", fields: [clinicianId], references: [id], onDelete: Cascade)
+  items          PrescriptionItem[]
+  reservations   Reservation[]
+
+  @@index([patientId])
+  @@index([encounterId])
+  @@index([clinicianId])
+}
+
+model PrescriptionItem {
+  id              String                 @id @default(uuid())
+  prescriptionId  String
+  medicineId      String
+  quantity        Int
+  instructions    String
+  dosageFrequency String?
+  status          PrescriptionItemStatus @default(PENDING)
+  createdAt       DateTime               @default(now())
+  prescription    Prescription           @relation(fields: [prescriptionId], references: [id], onDelete: Cascade)
+  medicine        Medicine               @relation(fields: [medicineId], references: [id], onDelete: Cascade)
+  reservations    Reservation[]
+
+  @@index([prescriptionId])
+  @@index([medicineId])
+}
+
 model Reservation {
   id                 String            @id @default(uuid())
-  prescriptionId     String
-  prescriptionItemId String
+  prescriptionId     String?
+  prescriptionItemId String?
   facilityId         String
   medicineId         String
   patientId          String
@@ -215,4 +303,44 @@ model Reservation {
   updatedAt          DateTime          @updatedAt
   facility           Facility          @relation(fields: [facilityId], references: [id], onDelete: Cascade)
   medicine           Medicine          @relation(fields: [medicineId], references: [id], onDelete: Cascade)
+  prescription       Prescription?     @relation(fields: [prescriptionId], references: [id], onDelete: SetNull)
+  prescriptionItem   PrescriptionItem? @relation(fields: [prescriptionItemId], references: [id], onDelete: SetNull)
+  patient            Patient           @relation(fields: [patientId], references: [id], onDelete: Cascade)
+
+  @@index([facilityId, status])
+  @@index([patientId])
+}
+
+model Notification {
+  id        String   @id @default(uuid())
+  userId    String
+  type      String
+  title     String
+  message   String
+  read      Boolean  @default(false)
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, read])
+}
+
+model AuditLog {
+  id         String    @id @default(uuid())
+  userId     String?
+  userEmail  String?
+  userRole   UserRole?
+  action     String
+  entityType String
+  entityId   String?
+  details    Json?
+  ipAddress  String?
+  facilityId String?
+  createdAt  DateTime  @default(now())
+  user       User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
+  facility   Facility? @relation(fields: [facilityId], references: [id], onDelete: SetNull)
+
+  @@index([action])
+  @@index([entityType, entityId])
+  @@index([createdAt])
+  @@index([facilityId])
 }

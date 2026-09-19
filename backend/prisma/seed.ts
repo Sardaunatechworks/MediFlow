@@ -1,23 +1,235 @@
-import { PrismaClient, FacilityType, FacilityStatus, VerificationStatus, MedicineStatus, InventoryStatus } from '@prisma/client';
+import {
+  PrismaClient,
+  FacilityType,
+  FacilityStatus,
+  VerificationStatus,
+  MedicineStatus,
+  InventoryStatus,
+  UserRole,
+  EncounterStatus,
+  UrgencyLevel,
+  Gender,
+  PrescriptionStatus,
+  PrescriptionItemStatus,
+} from '@prisma/client';
+import * as bcrypt from 'bcryptjs';
 
 const prisma = new PrismaClient();
 
-async function main() {
-  console.log('Seeding MediFlow database...');
+function hoursAgo(hours: number): Date {
+  return new Date(Date.now() - hours * 60 * 60 * 1000);
+}
 
-  // Clean existing data
+function minsAgo(mins: number): Date {
+  return new Date(Date.now() - mins * 60 * 1000);
+}
+
+async function main() {
+  console.log('Seeding MediFlow database with unified clinical, pharmacy, user, and audit records...');
+
+  // 1. Clean existing data in reverse order of foreign key dependency
+  await prisma.auditLog.deleteMany();
+  await prisma.notification.deleteMany();
+  await prisma.reservation.deleteMany();
+  await prisma.prescriptionItem.deleteMany();
+  await prisma.prescription.deleteMany();
   await prisma.clinicalOverride.deleteMany();
   await prisma.triageAssessment.deleteMany();
   await prisma.queueEvent.deleteMany();
   await prisma.encounter.deleteMany();
   await prisma.patient.deleteMany();
-  await prisma.reservation.deleteMany();
   await prisma.pharmacyInventory.deleteMany();
   await prisma.pharmacyProfile.deleteMany();
   await prisma.medicine.deleteMany();
+  await prisma.user.deleteMany();
   await prisma.facility.deleteMany();
 
-  // 15 medicines — common Nigerian pharmacy medicines
+  console.log('Cleaned old records');
+
+  // 2. Seed Facilities with deterministic IDs (matching frontend constants)
+  const hospitalId = 'f1000000-0000-0000-0000-000000000001';
+  const pharmacy1Id = 'f2000000-0000-0000-0000-000000000001';
+  const pharmacy2Id = 'f2000000-0000-0000-0000-000000000002';
+  const pharmacy3Id = 'f2000000-0000-0000-0000-000000000003';
+  const pharmacy4Id = 'f2000000-0000-0000-0000-000000000004';
+
+  const hospital = await prisma.facility.create({
+    data: {
+      id: hospitalId,
+      name: 'National Hospital Abuja',
+      type: FacilityType.HOSPITAL,
+      address: 'Plot 132 Central Business District, Abuja, FCT',
+      phone: '+2348039991122',
+      email: 'info@nationalhospital.gov.ng',
+      verificationStatus: VerificationStatus.VERIFIED,
+      status: FacilityStatus.ACTIVE,
+    },
+  });
+
+  const pharmacy1 = await prisma.facility.create({
+    data: {
+      id: pharmacy1Id,
+      name: 'MedPlus Pharmacy Maitama',
+      type: FacilityType.PHARMACY,
+      address: '24 Gana Street, Maitama, Abuja',
+      phone: '+2348031112233',
+      email: 'maitama@medplus.ng',
+      verificationStatus: VerificationStatus.VERIFIED,
+      status: FacilityStatus.ACTIVE,
+      pharmacyProfile: {
+        create: {
+          licenceNumber: 'PCN-ABJ-2024-0012',
+          operatingHours: '8:00 AM - 10:00 PM',
+          reservationEnabled: true,
+        },
+      },
+    },
+  });
+
+  const pharmacy2 = await prisma.facility.create({
+    data: {
+      id: pharmacy2Id,
+      name: 'HealthPlus Pharmacy Wuse 2',
+      type: FacilityType.PHARMACY,
+      address: '14 Aminu Kano Crescent, Wuse 2, Abuja',
+      phone: '+2348032223344',
+      email: 'wuse2@healthplus.ng',
+      verificationStatus: VerificationStatus.VERIFIED,
+      status: FacilityStatus.ACTIVE,
+      pharmacyProfile: {
+        create: {
+          licenceNumber: 'PCN-ABJ-2023-0841',
+          operatingHours: '24 Hours',
+          reservationEnabled: true,
+        },
+      },
+    },
+  });
+
+  const pharmacy3 = await prisma.facility.create({
+    data: {
+      id: pharmacy3Id,
+      name: 'Naza Pharmacy Garki',
+      type: FacilityType.PHARMACY,
+      address: '8 Lafia Close, Area 2, Garki, Abuja',
+      phone: '+2348033334455',
+      email: 'garki@nazapharm.ng',
+      verificationStatus: VerificationStatus.UNVERIFIED,
+      status: FacilityStatus.PENDING_VERIFICATION,
+      pharmacyProfile: {
+        create: {
+          licenceNumber: 'PCN-ABJ-2024-0991',
+          operatingHours: '08:00 - 20:00',
+          reservationEnabled: true,
+        },
+      },
+    },
+  });
+
+  const pharmacy4 = await prisma.facility.create({
+    data: {
+      id: pharmacy4Id,
+      name: 'Dana Community Pharmacy Asokoro',
+      type: FacilityType.PHARMACY,
+      address: '3 Yakubu Gowon Crescent, Asokoro, Abuja',
+      phone: '+2348034445566',
+      email: 'asokoro@danapharm.ng',
+      verificationStatus: VerificationStatus.REJECTED,
+      status: FacilityStatus.SUSPENDED,
+      pharmacyProfile: {
+        create: {
+          licenceNumber: 'PCN-ABJ-2021-0044',
+          operatingHours: '09:00 - 18:00',
+          reservationEnabled: false,
+        },
+      },
+    },
+  });
+
+  console.log('Created 5 facilities (1 Hospital, 4 Pharmacies)');
+
+  // 3. Seed Demo Users for all 7 roles with hashed password 'Password123!'
+  const defaultPasswordHash = await bcrypt.hash('Password123!', 10);
+
+  const usersData = [
+    {
+      id: 'user-triage-001',
+      email: 'nurse.ibrahim@nationalhospital.gov.ng',
+      name: 'Nurse Ibrahim',
+      password: defaultPasswordHash,
+      role: UserRole.TRIAGE_OFFICER,
+      title: 'Lead Triage Nurse',
+      facilityId: hospitalId,
+      phone: '+2348031234501',
+    },
+    {
+      id: 'user-doc-001',
+      email: 'dr.auwal@nationalhospital.gov.ng',
+      name: 'Dr. Auwal',
+      password: defaultPasswordHash,
+      role: UserRole.CLINICIAN,
+      title: 'Consultant Physician',
+      facilityId: hospitalId,
+      phone: '+2348031234502',
+    },
+    {
+      id: 'user-pt-001',
+      email: 'musa.danladi@example.com',
+      name: 'Musa Danladi',
+      password: defaultPasswordHash,
+      role: UserRole.PATIENT,
+      title: 'Verified Patient',
+      facilityId: hospitalId,
+      phone: '+2348099887766',
+    },
+    {
+      id: 'user-pharm-001',
+      email: 'zainab@medplus.ng',
+      name: 'Pharm. Zainab',
+      password: defaultPasswordHash,
+      role: UserRole.PHARMACY_STAFF,
+      title: 'Dispensing Pharmacist',
+      facilityId: pharmacy1Id,
+      phone: '+2348031234504',
+    },
+    {
+      id: 'user-pharm-admin-001',
+      email: 'okon@medplus.ng',
+      name: 'Pharm. Director Okon',
+      password: defaultPasswordHash,
+      role: UserRole.PHARMACY_ADMIN,
+      title: 'Superintendent Pharmacist',
+      facilityId: pharmacy1Id,
+      phone: '+2348031234505',
+    },
+    {
+      id: 'user-hosp-admin-001',
+      email: 'admin.bello@nationalhospital.gov.ng',
+      name: 'Director Bello',
+      password: defaultPasswordHash,
+      role: UserRole.HOSPITAL_ADMIN,
+      title: 'Chief Medical Director',
+      facilityId: hospitalId,
+      phone: '+2348031234506',
+    },
+    {
+      id: 'user-plat-admin-001',
+      email: 'superadmin@mediflow.mesh.gov.ng',
+      name: 'Super Admin Danladi',
+      password: defaultPasswordHash,
+      role: UserRole.PLATFORM_ADMIN,
+      title: 'Ecosystem Super Admin',
+      facilityId: null,
+      phone: '+2348031234507',
+    },
+  ];
+
+  for (const u of usersData) {
+    await prisma.user.create({ data: u });
+  }
+  console.log(`Created ${usersData.length} users covering all 7 system roles`);
+
+  // 4. Seed Essential Medicines (Nigerian Formulary / Standard Catalog)
   const medicinesData = [
     {
       genericName: 'Paracetamol',
@@ -156,308 +368,91 @@ async function main() {
     },
   ];
 
-  const medicines = [];
-  for (const med of medicinesData) {
-    const created = await prisma.medicine.create({ data: med });
-    medicines.push(created);
+  const seededMeds = [];
+  for (const m of medicinesData) {
+    const created = await prisma.medicine.create({ data: m });
+    seededMeds.push(created);
   }
-  console.log(`Created ${medicines.length} medicines`);
+  console.log(`Created ${seededMeds.length} medicines`);
 
-  // 5 pharmacies with mixed verification statuses
-  const pharmaciesData = [
-    {
-      name: 'MedPlus Pharmacy Ikeja',
-      address: '15 Allen Avenue, Ikeja, Lagos',
-      phone: '+2348012345678',
-      email: 'ikeja@medplus.com.ng',
-      verificationStatus: VerificationStatus.VERIFIED,
-      status: FacilityStatus.ACTIVE,
-      profile: {
-        licenceNumber: 'PCN/LAG/2024/001',
-        operatingHours: '08:00 - 22:00',
-        reservationEnabled: true,
-      },
-    },
-    {
-      name: 'HealthPlus Pharmacy Victoria Island',
-      address: '10 Akin Adesola Street, Victoria Island, Lagos',
-      phone: '+2348098765432',
-      email: 'vi@healthplus.com.ng',
-      verificationStatus: VerificationStatus.VERIFIED,
-      status: FacilityStatus.ACTIVE,
-      profile: {
-        licenceNumber: 'PCN/LAG/2024/002',
-        operatingHours: '07:00 - 23:00',
-        reservationEnabled: true,
-      },
-    },
-    {
-      name: 'Alpha Pharmacy Yaba',
-      address: '45 Herbert Macaulay Way, Yaba, Lagos',
-      phone: '+2348055551234',
-      email: 'yaba@alphapharmacy.com.ng',
-      verificationStatus: VerificationStatus.VERIFIED,
-      status: FacilityStatus.ACTIVE,
-      profile: {
-        licenceNumber: 'PCN/LAG/2024/003',
-        operatingHours: '08:00 - 21:00',
-        reservationEnabled: true,
-      },
-    },
-    {
-      name: 'Naza Pharmacy Wuse',
-      address: '12 Aminu Kano Crescent, Wuse 2, Abuja',
-      phone: '+2348033334567',
-      email: 'wuse@nazapharmacy.com.ng',
-      verificationStatus: VerificationStatus.UNVERIFIED,
-      status: FacilityStatus.PENDING_VERIFICATION,
-      profile: {
-        licenceNumber: 'PCN/ABJ/2024/004',
-        operatingHours: '09:00 - 20:00',
-        reservationEnabled: true,
-      },
-    },
-    {
-      name: 'Dana Pharmacy Bodija',
-      address: '8 Bodija Road, Ibadan, Oyo State',
-      phone: '+2348077778901',
-      email: 'bodija@danapharmacy.com.ng',
-      verificationStatus: VerificationStatus.UNVERIFIED,
-      status: FacilityStatus.PENDING_VERIFICATION,
-      profile: {
-        licenceNumber: 'PCN/OYO/2024/005',
-        operatingHours: '08:30 - 20:30',
-        reservationEnabled: false,
-      },
-    },
+  // 5. Seed Inventory across pharmacies
+  // MedPlus Maitama inventory
+  const medPlusInv = [
+    { medicineId: seededMeds[0].id, quantity: 150, status: InventoryStatus.AVAILABLE, price: 500, lastUpdatedAt: hoursAgo(1) },
+    { medicineId: seededMeds[1].id, quantity: 45, status: InventoryStatus.AVAILABLE, price: 1200, lastUpdatedAt: hoursAgo(0.5) },
+    { medicineId: seededMeds[4].id, quantity: 80, status: InventoryStatus.AVAILABLE, price: 2200, lastUpdatedAt: hoursAgo(1.5) },
+    { medicineId: seededMeds[7].id, quantity: 60, status: InventoryStatus.AVAILABLE, price: 600, lastUpdatedAt: hoursAgo(2) },
+    { medicineId: seededMeds[8].id, quantity: 10, status: InventoryStatus.LOW_STOCK, price: 400, lastUpdatedAt: hoursAgo(12) },
   ];
 
-  const facilities = [];
-  for (const ph of pharmaciesData) {
-    const { profile, ...facilityData } = ph;
-    const facility = await prisma.facility.create({
-      data: {
-        ...facilityData,
-        type: FacilityType.PHARMACY,
-        pharmacyProfile: {
-          create: profile,
-        },
-      },
-      include: { pharmacyProfile: true },
-    });
-    facilities.push(facility);
-  }
-  console.log(`Created ${facilities.length} pharmacies`);
-
-  // Inventory records linking pharmacies to medicines with varied statuses
-  const now = new Date();
-  const hoursAgo = (h: number) => new Date(now.getTime() - h * 60 * 60 * 1000);
-
-  const inventoryEntries: Array<{
-    facilityIndex: number;
-    medicineIndex: number;
-    quantity: number;
-    status: InventoryStatus;
-    price: number;
-    lastUpdatedAt: Date;
-  }> = [
-    // MedPlus Ikeja — well stocked, recent updates
-    { facilityIndex: 0, medicineIndex: 0, quantity: 150, status: InventoryStatus.AVAILABLE, price: 500, lastUpdatedAt: hoursAgo(1) },
-    { facilityIndex: 0, medicineIndex: 1, quantity: 80, status: InventoryStatus.AVAILABLE, price: 1200, lastUpdatedAt: hoursAgo(0.5) },
-    { facilityIndex: 0, medicineIndex: 2, quantity: 5, status: InventoryStatus.LOW_STOCK, price: 800, lastUpdatedAt: hoursAgo(3) },
-    { facilityIndex: 0, medicineIndex: 4, quantity: 60, status: InventoryStatus.AVAILABLE, price: 2500, lastUpdatedAt: hoursAgo(2) },
-    { facilityIndex: 0, medicineIndex: 8, quantity: 90, status: InventoryStatus.AVAILABLE, price: 700, lastUpdatedAt: hoursAgo(5) },
-    { facilityIndex: 0, medicineIndex: 9, quantity: 0, status: InventoryStatus.OUT_OF_STOCK, price: 1800, lastUpdatedAt: hoursAgo(10) },
-    { facilityIndex: 0, medicineIndex: 12, quantity: 40, status: InventoryStatus.AVAILABLE, price: 600, lastUpdatedAt: hoursAgo(1) },
-
-    // HealthPlus VI — high verification, mixed freshness
-    { facilityIndex: 1, medicineIndex: 0, quantity: 200, status: InventoryStatus.AVAILABLE, price: 450, lastUpdatedAt: hoursAgo(0.2) },
-    { facilityIndex: 1, medicineIndex: 2, quantity: 30, status: InventoryStatus.AVAILABLE, price: 750, lastUpdatedAt: hoursAgo(20) },
-    { facilityIndex: 1, medicineIndex: 3, quantity: 15, status: InventoryStatus.AVAILABLE, price: 1500, lastUpdatedAt: hoursAgo(1) },
-    { facilityIndex: 1, medicineIndex: 4, quantity: 3, status: InventoryStatus.LOW_STOCK, price: 2700, lastUpdatedAt: hoursAgo(50) },
-    { facilityIndex: 1, medicineIndex: 5, quantity: 70, status: InventoryStatus.AVAILABLE, price: 1100, lastUpdatedAt: hoursAgo(4) },
-    { facilityIndex: 1, medicineIndex: 6, quantity: 45, status: InventoryStatus.AVAILABLE, price: 900, lastUpdatedAt: hoursAgo(30) },
-    { facilityIndex: 1, medicineIndex: 10, quantity: 25, status: InventoryStatus.AVAILABLE, price: 1400, lastUpdatedAt: hoursAgo(80) },
-
-    // Alpha Yaba — verified, some stale records
-    { facilityIndex: 2, medicineIndex: 0, quantity: 10, status: InventoryStatus.LOW_STOCK, price: 550, lastUpdatedAt: hoursAgo(60) },
-    { facilityIndex: 2, medicineIndex: 1, quantity: 100, status: InventoryStatus.AVAILABLE, price: 1150, lastUpdatedAt: hoursAgo(2) },
-    { facilityIndex: 2, medicineIndex: 3, quantity: 50, status: InventoryStatus.AVAILABLE, price: 1450, lastUpdatedAt: hoursAgo(15) },
-    { facilityIndex: 2, medicineIndex: 7, quantity: 60, status: InventoryStatus.AVAILABLE, price: 600, lastUpdatedAt: hoursAgo(1) },
-    { facilityIndex: 2, medicineIndex: 8, quantity: 0, status: InventoryStatus.OUT_OF_STOCK, price: 750, lastUpdatedAt: hoursAgo(100) },
-    { facilityIndex: 2, medicineIndex: 11, quantity: 35, status: InventoryStatus.AVAILABLE, price: 400, lastUpdatedAt: hoursAgo(6) },
-    { facilityIndex: 2, medicineIndex: 13, quantity: 20, status: InventoryStatus.AVAILABLE, price: 500, lastUpdatedAt: hoursAgo(25) },
-    { facilityIndex: 2, medicineIndex: 14, quantity: 0, status: InventoryStatus.OUT_OF_STOCK, price: 300, lastUpdatedAt: hoursAgo(200) },
-
-    // Naza Wuse — unverified
-    { facilityIndex: 3, medicineIndex: 0, quantity: 80, status: InventoryStatus.AVAILABLE, price: 480, lastUpdatedAt: hoursAgo(3) },
-    { facilityIndex: 3, medicineIndex: 2, quantity: 0, status: InventoryStatus.OUT_OF_STOCK, price: 850, lastUpdatedAt: hoursAgo(5) },
-    { facilityIndex: 3, medicineIndex: 4, quantity: 40, status: InventoryStatus.AVAILABLE, price: 2400, lastUpdatedAt: hoursAgo(1) },
-    { facilityIndex: 3, medicineIndex: 6, quantity: 8, status: InventoryStatus.LOW_STOCK, price: 950, lastUpdatedAt: hoursAgo(40) },
-    { facilityIndex: 3, medicineIndex: 7, quantity: 55, status: InventoryStatus.AVAILABLE, price: 580, lastUpdatedAt: hoursAgo(12) },
-    { facilityIndex: 3, medicineIndex: 9, quantity: 30, status: InventoryStatus.AVAILABLE, price: 1700, lastUpdatedAt: hoursAgo(8) },
-    { facilityIndex: 3, medicineIndex: 12, quantity: 15, status: InventoryStatus.LOW_STOCK, price: 650, lastUpdatedAt: hoursAgo(70) },
-
-    // Dana Bodija — unverified, reservation disabled
-    { facilityIndex: 4, medicineIndex: 1, quantity: 20, status: InventoryStatus.LOW_STOCK, price: 1300, lastUpdatedAt: hoursAgo(18) },
-    { facilityIndex: 4, medicineIndex: 3, quantity: 0, status: InventoryStatus.OUT_OF_STOCK, price: 1600, lastUpdatedAt: hoursAgo(90) },
-    { facilityIndex: 4, medicineIndex: 5, quantity: 90, status: InventoryStatus.AVAILABLE, price: 1050, lastUpdatedAt: hoursAgo(2) },
-    { facilityIndex: 4, medicineIndex: 8, quantity: 110, status: InventoryStatus.AVAILABLE, price: 680, lastUpdatedAt: hoursAgo(24) },
-    { facilityIndex: 4, medicineIndex: 10, quantity: 18, status: InventoryStatus.AVAILABLE, price: 1350, lastUpdatedAt: hoursAgo(45) },
-    { facilityIndex: 4, medicineIndex: 11, quantity: 50, status: InventoryStatus.AVAILABLE, price: 380, lastUpdatedAt: hoursAgo(0.8) },
-    { facilityIndex: 4, medicineIndex: 14, quantity: 25, status: InventoryStatus.AVAILABLE, price: 280, lastUpdatedAt: hoursAgo(6) },
-  ];
-
-  for (const entry of inventoryEntries) {
+  for (const item of medPlusInv) {
     await prisma.pharmacyInventory.create({
       data: {
-        facilityId: facilities[entry.facilityIndex].id,
-        medicineId: medicines[entry.medicineIndex].id,
-        quantity: entry.quantity,
-        status: entry.status,
-        price: entry.price,
-        lastUpdatedAt: entry.lastUpdatedAt,
+        facilityId: pharmacy1Id,
+        medicineId: item.medicineId,
+        quantity: item.quantity,
+        status: item.status,
+        price: item.price,
+        lastUpdatedAt: item.lastUpdatedAt,
       },
     });
   }
-  console.log(`Created ${inventoryEntries.length} inventory records`);
 
-  // Seed Hospital Facility
-  const hospital = await prisma.facility.create({
-    data: {
-      name: 'National Hospital Abuja',
-      type: FacilityType.HOSPITAL,
-      address: 'Plot 132 Central Business District, Abuja, FCT',
-      phone: '+2348039991122',
-      email: 'info@nationalhospital.gov.ng',
-      verificationStatus: VerificationStatus.VERIFIED,
-      status: FacilityStatus.ACTIVE,
-    },
-  });
-  console.log(`Created hospital facility: ${hospital.name} (${hospital.id})`);
+  // HealthPlus Wuse 2 inventory
+  const healthPlusInv = [
+    { medicineId: seededMeds[0].id, quantity: 100, status: InventoryStatus.AVAILABLE, price: 550, lastUpdatedAt: hoursAgo(2) },
+    { medicineId: seededMeds[1].id, quantity: 8, status: InventoryStatus.LOW_STOCK, price: 1250, lastUpdatedAt: hoursAgo(4) },
+    { medicineId: seededMeds[4].id, quantity: 40, status: InventoryStatus.AVAILABLE, price: 2300, lastUpdatedAt: hoursAgo(0.8) },
+    { medicineId: seededMeds[7].id, quantity: 90, status: InventoryStatus.AVAILABLE, price: 580, lastUpdatedAt: hoursAgo(3) },
+    { medicineId: seededMeds[6].id, quantity: 30, status: InventoryStatus.AVAILABLE, price: 1500, lastUpdatedAt: hoursAgo(5) },
+  ];
 
-  // Seed 3 Demo Patients for Clinical Workflow & Queue demonstration:
-  // Patient 1 (Stable - GREEN, arrived 75 mins ago)
-  const patientGreen = await prisma.patient.create({
-    data: {
-      patientIdentifier: 'MF-PT-100001',
-      firstName: 'Fatima',
-      lastName: 'Bello',
-      age: 28,
-      gender: 'FEMALE',
-      phone: '+2348011223344',
-      email: 'fatima.bello@example.com',
-      address: 'Garki 2, Abuja',
-    },
-  });
+  for (const item of healthPlusInv) {
+    await prisma.pharmacyInventory.create({
+      data: {
+        facilityId: pharmacy2Id,
+        medicineId: item.medicineId,
+        quantity: item.quantity,
+        status: item.status,
+        price: item.price,
+        lastUpdatedAt: item.lastUpdatedAt,
+      },
+    });
+  }
 
-  const encGreen = await prisma.encounter.create({
-    data: {
-      patientId: patientGreen.id,
-      facilityId: hospital.id,
-      presentingComplaint: 'Mild tension headache and nasal congestion',
-      status: 'WAITING',
-      priority: 'GREEN',
-      priorityScore: 100,
-      startedAt: new Date(now.getTime() - 75 * 60 * 1000),
-    },
-  });
+  console.log('Created pharmacy inventories');
 
-  await prisma.triageAssessment.create({
-    data: {
-      encounterId: encGreen.id,
-      assessedBy: 'Nurse Amina',
-      temperature: 36.8,
-      systolicBp: 118,
-      diastolicBp: 78,
-      pulseRate: 72,
-      respiratoryRate: 16,
-      oxygenSaturation: 98,
-      recommendedUrgency: 'GREEN',
-      finalUrgency: 'GREEN',
-      reasoning: ['All measured vital signs are within normal clinical thresholds with no critical red flags'],
-      isCriticalAlert: false,
-    },
-  });
-
-  // Patient 2 (Urgent - YELLOW, arrived 35 mins ago)
-  const patientYellow = await prisma.patient.create({
-    data: {
-      patientIdentifier: 'MF-PT-100002',
-      firstName: 'Emeka',
-      lastName: 'Okonkwo',
-      age: 36,
-      gender: 'MALE',
-      phone: '+2348055667788',
-      email: 'emeka.okonkwo@example.com',
-      address: 'Wuse Zone 4, Abuja',
-    },
-  });
-
-  const encYellow = await prisma.encounter.create({
-    data: {
-      patientId: patientYellow.id,
-      facilityId: hospital.id,
-      presentingComplaint: 'High fever, rigors, and moderate abdominal cramps',
-      status: 'WAITING',
-      priority: 'YELLOW',
-      priorityScore: 10000,
-      startedAt: new Date(now.getTime() - 35 * 60 * 1000),
-    },
-  });
-
-  await prisma.triageAssessment.create({
-    data: {
-      encounterId: encYellow.id,
-      assessedBy: 'Nurse Amina',
-      temperature: 39.2,
-      systolicBp: 132,
-      diastolicBp: 86,
-      pulseRate: 108,
-      respiratoryRate: 22,
-      oxygenSaturation: 94,
-      recommendedUrgency: 'YELLOW',
-      finalUrgency: 'YELLOW',
-      reasoning: [
-        'SpO2 is 94% (moderate hypoxemia 90-94%)',
-        'Respiratory rate is 22/min (tachypnea 21-30)',
-        'Pulse rate is 108 bpm (tachycardia 101-130 bpm)',
-        'Temperature is 39.2°C (high fever >= 38.5°C)',
-      ],
-      isCriticalAlert: false,
-    },
-  });
-
-  // Patient 3 (Critical - RED, arrived 8 mins ago)
+  // 6. Seed Clinical Patients, Encounters, and Triage Assessments (RED, YELLOW, GREEN)
+  // Patient 1: Musa Danladi (RED)
   const patientRed = await prisma.patient.create({
     data: {
       patientIdentifier: 'MF-PT-100003',
       firstName: 'Musa',
       lastName: 'Danladi',
       age: 62,
-      gender: 'MALE',
+      gender: Gender.MALE,
       phone: '+2348099887766',
       email: 'musa.danladi@example.com',
       address: 'Maitama, Abuja',
     },
   });
 
-  const encRed = await prisma.encounter.create({
+  const encounterRed = await prisma.encounter.create({
     data: {
       patientId: patientRed.id,
-      facilityId: hospital.id,
+      facilityId: hospitalId,
       presentingComplaint: 'Crushing retrosternal chest pain and severe dyspnea',
-      status: 'ESCALATED',
-      priority: 'RED',
+      status: EncounterStatus.ESCALATED,
+      priority: UrgencyLevel.RED,
       priorityScore: 1000000,
-      startedAt: new Date(now.getTime() - 8 * 60 * 1000),
+      startedAt: minsAgo(8),
     },
   });
 
   await prisma.triageAssessment.create({
     data: {
-      encounterId: encRed.id,
-      assessedBy: 'Nurse Amina',
+      encounterId: encounterRed.id,
+      assessedBy: 'Nurse Ibrahim',
       temperature: 37.1,
       systolicBp: 84,
       diastolicBp: 52,
@@ -469,8 +464,8 @@ async function main() {
         severeChestPain: true,
         shockSigns: true,
       },
-      recommendedUrgency: 'RED',
-      finalUrgency: 'RED',
+      recommendedUrgency: UrgencyLevel.RED,
+      finalUrgency: UrgencyLevel.RED,
       reasoning: [
         'Critical red-flag detected: Severe Respiratory Distress',
         'Critical red-flag detected: Severe Chest Pain',
@@ -481,16 +476,239 @@ async function main() {
         'Systolic BP is 84 mmHg (severe hypotension / shock < 90 mmHg)',
       ],
       isCriticalAlert: true,
+      assessedAt: minsAgo(7),
     },
   });
 
-  console.log('Created 3 demo clinical patients, encounters, and triages (Red, Yellow, Green)');
-  console.log('Seeding completed successfully');
+  // Patient 2: Emeka Okonkwo (YELLOW)
+  const patientYellow = await prisma.patient.create({
+    data: {
+      patientIdentifier: 'MF-PT-100002',
+      firstName: 'Emeka',
+      lastName: 'Okonkwo',
+      age: 36,
+      gender: Gender.MALE,
+      phone: '+2348055667788',
+      email: 'emeka.okonkwo@example.com',
+      address: 'Wuse Zone 4, Abuja',
+    },
+  });
+
+  const encounterYellow = await prisma.encounter.create({
+    data: {
+      patientId: patientYellow.id,
+      facilityId: hospitalId,
+      presentingComplaint: 'High fever, rigors, and moderate abdominal cramps',
+      status: EncounterStatus.WAITING,
+      priority: UrgencyLevel.YELLOW,
+      priorityScore: 10000,
+      startedAt: minsAgo(35),
+    },
+  });
+
+  await prisma.triageAssessment.create({
+    data: {
+      encounterId: encounterYellow.id,
+      assessedBy: 'Nurse Ibrahim',
+      temperature: 39.2,
+      systolicBp: 132,
+      diastolicBp: 86,
+      pulseRate: 108,
+      respiratoryRate: 22,
+      oxygenSaturation: 94,
+      recommendedUrgency: UrgencyLevel.YELLOW,
+      finalUrgency: UrgencyLevel.YELLOW,
+      reasoning: [
+        'SpO2 is 94% (moderate hypoxemia 90-94%)',
+        'Respiratory rate is 22/min (tachypnea 21-30)',
+        'Pulse rate is 108 bpm (tachycardia 101-130 bpm)',
+        'Temperature is 39.2°C (high fever >= 38.5°C)',
+      ],
+      isCriticalAlert: false,
+      assessedAt: minsAgo(33),
+    },
+  });
+
+  // Patient 3: Fatima Bello (GREEN)
+  const patientGreen = await prisma.patient.create({
+    data: {
+      patientIdentifier: 'MF-PT-100001',
+      firstName: 'Fatima',
+      lastName: 'Bello',
+      age: 28,
+      gender: Gender.FEMALE,
+      phone: '+2348011223344',
+      email: 'fatima.bello@example.com',
+      address: 'Garki 2, Abuja',
+    },
+  });
+
+  const encounterGreen = await prisma.encounter.create({
+    data: {
+      patientId: patientGreen.id,
+      facilityId: hospitalId,
+      presentingComplaint: 'Mild tension headache and nasal congestion',
+      status: EncounterStatus.WAITING,
+      priority: UrgencyLevel.GREEN,
+      priorityScore: 100,
+      startedAt: minsAgo(75),
+    },
+  });
+
+  await prisma.triageAssessment.create({
+    data: {
+      encounterId: encounterGreen.id,
+      assessedBy: 'Nurse Ibrahim',
+      temperature: 36.8,
+      systolicBp: 118,
+      diastolicBp: 78,
+      pulseRate: 72,
+      respiratoryRate: 16,
+      oxygenSaturation: 98,
+      recommendedUrgency: UrgencyLevel.GREEN,
+      finalUrgency: UrgencyLevel.GREEN,
+      reasoning: ['All measured vital signs are within normal clinical thresholds with no critical red flags'],
+      isCriticalAlert: false,
+      assessedAt: minsAgo(70),
+    },
+  });
+
+  console.log('Created 3 demo clinical patients and triage assessments');
+
+  // 7. Seed Clinical Prescriptions issued by Dr. Auwal
+  const prescriptionRed = await prisma.prescription.create({
+    data: {
+      encounterId: encounterRed.id,
+      patientId: patientRed.id,
+      clinicianId: 'user-doc-001',
+      diagnosisNotes: 'Suspected acute coronary episode / severe hypertensive crisis. Emergency stabilization commenced.',
+      status: PrescriptionStatus.ISSUED,
+      issuedAt: minsAgo(5),
+      items: {
+        create: [
+          {
+            medicineId: seededMeds[7].id, // Amlodipine 5mg
+            quantity: 30,
+            instructions: 'Take 1 tablet daily every morning',
+            dosageFrequency: 'Once daily',
+            status: PrescriptionItemStatus.PENDING,
+          },
+        ],
+      },
+    },
+    include: { items: true },
+  });
+
+  const prescriptionYellow = await prisma.prescription.create({
+    data: {
+      encounterId: encounterYellow.id,
+      patientId: patientYellow.id,
+      clinicianId: 'user-doc-001',
+      diagnosisNotes: 'Acute uncomplicated malaria with febrile syndrome.',
+      status: PrescriptionStatus.ISSUED,
+      issuedAt: minsAgo(15),
+      items: {
+        create: [
+          {
+            medicineId: seededMeds[4].id, // Artemether-Lumefantrine
+            quantity: 24,
+            instructions: 'Take 4 tablets stat, 4 tablets after 8 hours, then 4 tablets twice daily for 2 days',
+            dosageFrequency: 'As directed',
+            status: PrescriptionItemStatus.PENDING,
+          },
+          {
+            medicineId: seededMeds[0].id, // Paracetamol
+            quantity: 20,
+            instructions: 'Take 2 tablets every 6 hours for fever/pain',
+            dosageFrequency: 'QDS as needed',
+            status: PrescriptionItemStatus.PENDING,
+          },
+        ],
+      },
+    },
+    include: { items: true },
+  });
+
+  console.log('Created clinical prescriptions issued by clinician');
+
+  // 8. Seed Initial Reservation (Patient Yellow reserved Artemether-Lumefantrine at MedPlus Maitama)
+  const reservationYellow = await prisma.reservation.create({
+    data: {
+      prescriptionId: prescriptionYellow.id,
+      prescriptionItemId: prescriptionYellow.items[0].id,
+      facilityId: pharmacy1Id,
+      medicineId: seededMeds[4].id,
+      patientId: patientYellow.id,
+      status: 'PENDING',
+      requestedAt: minsAgo(10),
+      expiresAt: new Date(Date.now() + 2 * 60 * 60 * 1000),
+    },
+  });
+
+  console.log('Created initial pending reservation');
+
+  // 9. Seed Audit Logs
+  await prisma.auditLog.createMany({
+    data: [
+      {
+        userId: 'user-triage-001',
+        userEmail: 'nurse.ibrahim@nationalhospital.gov.ng',
+        userRole: UserRole.TRIAGE_OFFICER,
+        action: 'PATIENT_REGISTERED',
+        entityType: 'Patient',
+        entityId: patientRed.id,
+        facilityId: hospitalId,
+        details: { patientIdentifier: patientRed.patientIdentifier, name: 'Musa Danladi' },
+      },
+      {
+        userId: 'user-triage-001',
+        userEmail: 'nurse.ibrahim@nationalhospital.gov.ng',
+        userRole: UserRole.TRIAGE_OFFICER,
+        action: 'TRIAGE_CLASSIFIED',
+        entityType: 'TriageAssessment',
+        entityId: encounterRed.id,
+        facilityId: hospitalId,
+        details: { recommendedUrgency: 'RED', priorityScore: 1000000, isCritical: true },
+      },
+      {
+        userId: 'user-doc-001',
+        userEmail: 'dr.auwal@nationalhospital.gov.ng',
+        userRole: UserRole.CLINICIAN,
+        action: 'PRESCRIPTION_CREATED',
+        entityType: 'Prescription',
+        entityId: prescriptionYellow.id,
+        facilityId: hospitalId,
+        details: { patientId: patientYellow.id, itemsCount: 2 },
+      },
+      {
+        userId: 'user-pt-001',
+        userEmail: 'musa.danladi@example.com',
+        userRole: UserRole.PATIENT,
+        action: 'RESERVATION_CREATED',
+        entityType: 'Reservation',
+        entityId: reservationYellow.id,
+        facilityId: pharmacy1Id,
+        details: { medicineName: 'Artemether-Lumefantrine', pharmacyName: 'MedPlus Pharmacy Maitama' },
+      },
+      {
+        userId: 'user-plat-admin-001',
+        userEmail: 'superadmin@mediflow.mesh.gov.ng',
+        userRole: UserRole.PLATFORM_ADMIN,
+        action: 'FACILITY_VERIFIED',
+        entityType: 'Facility',
+        entityId: pharmacy1Id,
+        details: { status: 'VERIFIED', name: 'MedPlus Pharmacy Maitama' },
+      },
+    ],
+  });
+
+  console.log('Created initial audit log trail');
+  console.log('MediFlow Database seeding completed successfully! ✨');
 }
 
 main()
   .catch((e) => {
-    console.error(e);
+    console.error('Seeding error:', e);
     process.exit(1);
   })
   .finally(async () => {

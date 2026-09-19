@@ -8,12 +8,12 @@ import {
 import { EncounterStatus, UrgencyLevel } from '@prisma/client';
 
 export class CreateEncounterDto {
-  @IsUUID('4', { message: 'patientId must be a valid UUID' })
-  @IsNotEmpty()
+  @IsString()
+  @IsNotEmpty({ message: 'patientId is required' })
   patientId: string;
 
-  @IsUUID('4', { message: 'facilityId must be a valid UUID' })
-  @IsNotEmpty()
+  @IsString()
+  @IsNotEmpty({ message: 'facilityId is required' })
   facilityId: string;
 
   @IsString()

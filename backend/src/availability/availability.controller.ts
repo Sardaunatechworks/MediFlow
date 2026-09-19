@@ -1,12 +1,15 @@
-import { Controller, Get, Query } from '@nestjs/common';
+import { Controller, Get, Query, UseGuards } from '@nestjs/common';
 import { AvailabilityService } from './availability.service';
 import { ResponseHelper } from '../common/response.helper';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { Public } from '../auth/decorators/public.decorator';
 
 @Controller('availability')
+@UseGuards(JwtAuthGuard)
 export class AvailabilityController {
   constructor(private readonly availabilityService: AvailabilityService) {}
 
-  // TODO: Auth guard — requires PATIENT, CLINICIAN or authenticated role
+  @Public()
   @Get('search')
   async search(
     @Query('medicineId') medicineId?: string,

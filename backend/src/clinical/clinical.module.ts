@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { PrismaModule } from '../prisma/prisma.module';
+import { AuditModule } from '../audit/audit.module';
 import { PatientsController } from './patients/patients.controller';
 import { PatientsService } from './patients/patients.service';
 import { EncountersController } from './encounters/encounters.controller';
@@ -9,9 +10,10 @@ import { TriageService } from './triage/triage.service';
 import { TriageEngineService } from './triage/triage-engine.service';
 import { QueueController } from './queue/queue.controller';
 import { QueueService } from './queue/queue.service';
+import { PrescriptionsModule } from './prescriptions/prescriptions.module';
 
 @Module({
-  imports: [PrismaModule],
+  imports: [PrismaModule, AuditModule, PrescriptionsModule],
   controllers: [
     PatientsController,
     EncountersController,
@@ -31,6 +33,7 @@ import { QueueService } from './queue/queue.service';
     TriageService,
     TriageEngineService,
     QueueService,
+    PrescriptionsModule,
   ],
 })
 export class ClinicalModule {}

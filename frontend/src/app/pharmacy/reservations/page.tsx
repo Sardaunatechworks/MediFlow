@@ -63,18 +63,32 @@ export default function PharmacyReservationsPage() {
     setBackendOffline(false);
 
     try {
-      const results: Reservation[] = [];
+      // 1. Fetch live reservations for the active facility
+      let liveList: Reservation[] = [];
+      try {
+        liveList = await reservationApi.list({ facilityId: facility?.id });
+      } catch (e) {
+        // Ignore list query failure, fallback to ID lookup
+      }
 
+      const mapById = new Map<string, Reservation>();
+      (liveList || []).forEach((r) => mapById.set(r.id, r));
+
+      // 2. Also check any known IDs in session storage
       for (const id of knownReservationIds) {
-        try {
-          const res = await reservationApi.getById(id);
-          if (res) {
-            results.push(res);
+        if (!mapById.has(id)) {
+          try {
+            const res = await reservationApi.getById(id);
+            if (res) {
+              mapById.set(res.id, res);
+            }
+          } catch {
+            // skip if not found
           }
-        } catch {
-          // If a reservation ID doesn't exist on backend, skip it
         }
       }
+
+      const results = Array.from(mapById.values());
 
       // Sort with newest requested first
       results.sort(
@@ -90,7 +104,7 @@ export default function PharmacyReservationsPage() {
     } finally {
       setIsLoading(false);
     }
-  }, [knownReservationIds, toast]);
+  }, [facility?.id, knownReservationIds, toast]);
 
   useEffect(() => {
     loadKnownReservations();

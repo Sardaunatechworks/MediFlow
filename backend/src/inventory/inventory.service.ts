@@ -1,12 +1,16 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { AuditService } from '../audit/audit.service';
 import { UpdateInventoryDto } from './dto/update-inventory.dto';
 
 @Injectable()
 export class InventoryService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private auditService: AuditService,
+  ) {}
 
-  async addInventory(facilityId: string, dto: UpdateInventoryDto) {
+  async addInventory(facilityId: string, dto: UpdateInventoryDto, user?: any) {
     // Verify facility exists and is a pharmacy
     const facility = await this.prisma.facility.findUnique({
       where: { id: facilityId },
@@ -59,7 +63,7 @@ export class InventoryService {
         quantity: dto.quantity ?? 0,
         status: dto.status ?? 'AVAILABLE',
         price: dto.price,
-        updatedBy: dto.updatedBy,
+        updatedBy: user?.name || dto.updatedBy,
         lastUpdatedAt: new Date(),
       },
       create: {
@@ -68,11 +72,26 @@ export class InventoryService {
         quantity: dto.quantity ?? 0,
         status: dto.status ?? 'AVAILABLE',
         price: dto.price,
-        updatedBy: dto.updatedBy,
+        updatedBy: user?.name || dto.updatedBy,
       },
       include: {
         medicine: true,
         facility: true,
+      },
+    });
+
+    await this.auditService.log({
+      userId: user?.id,
+      userEmail: user?.email,
+      userRole: user?.role,
+      action: 'INVENTORY_UPDATED',
+      entityType: 'PharmacyInventory',
+      entityId: inventory.id,
+      facilityId,
+      details: {
+        medicineName: medicine.genericName,
+        quantity: inventory.quantity,
+        status: inventory.status,
       },
     });
 
@@ -83,6 +102,7 @@ export class InventoryService {
     facilityId: string,
     medicineId: string,
     dto: UpdateInventoryDto,
+    user?: any,
   ) {
     const existing = await this.prisma.pharmacyInventory.findUnique({
       where: {
@@ -112,12 +132,27 @@ export class InventoryService {
         quantity: dto.quantity !== undefined ? dto.quantity : undefined,
         status: dto.status,
         price: dto.price,
-        updatedBy: dto.updatedBy,
+        updatedBy: user?.name || dto.updatedBy,
         lastUpdatedAt: new Date(),
       },
       include: {
         medicine: true,
         facility: true,
+      },
+    });
+
+    await this.auditService.log({
+      userId: user?.id,
+      userEmail: user?.email,
+      userRole: user?.role,
+      action: 'INVENTORY_UPDATED',
+      entityType: 'PharmacyInventory',
+      entityId: updated.id,
+      facilityId,
+      details: {
+        medicineName: updated.medicine.genericName,
+        quantity: updated.quantity,
+        status: updated.status,
       },
     });
 

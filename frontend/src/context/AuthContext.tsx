@@ -3,6 +3,7 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { UserRole, Facility } from '@/types/domain';
 import { DEMO_FACILITIES, USER_ROLES } from '@/lib/constants';
+import { authApi } from '@/lib/api';
 
 export interface AuthUser {
   id: string;
@@ -14,7 +15,7 @@ export interface AuthUser {
   facilityId: string;
 }
 
-// Preset Accounts for role demonstration (used for development evaluation)
+// Preset Accounts for role demonstration (used for development evaluation & instant testing)
 export const PRESET_ACCOUNTS: Record<UserRole, AuthUser> = {
   TRIAGE_OFFICER: {
     id: 'user-triage-001',
@@ -93,7 +94,7 @@ interface AuthContextType {
   setActiveEncounterId: (id: string | null) => void;
   login: (email: string, password?: string, targetRole?: UserRole) => Promise<{ success: boolean; user: AuthUser; defaultPath: string }>;
   logout: () => void;
-  setRole: (role: UserRole) => void;
+  setRole: (role: UserRole) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -130,7 +131,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const login = async (
     email: string,
-    _password?: string,
+    password?: string,
     targetRole?: UserRole
   ): Promise<{ success: boolean; user: AuthUser; defaultPath: string }> => {
     const cleanEmail = email.trim().toLowerCase();
@@ -143,22 +144,46 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         resolvedRole = 'CLINICIAN';
       } else if (cleanEmail.includes('nurse') || cleanEmail.includes('triage')) {
         resolvedRole = 'TRIAGE_OFFICER';
-      } else if (cleanEmail.includes('patient')) {
+      } else if (cleanEmail.includes('patient') || cleanEmail.includes('musa')) {
         resolvedRole = 'PATIENT';
-      } else if (cleanEmail.includes('pharmacy') || cleanEmail.includes('medplus')) {
+      } else if (cleanEmail.includes('zainab') || cleanEmail.includes('pharmacy')) {
         resolvedRole = 'PHARMACY_STAFF';
+      } else if (cleanEmail.includes('okon')) {
+        resolvedRole = 'PHARMACY_ADMIN';
       } else if (cleanEmail.includes('platform') || cleanEmail.includes('super')) {
         resolvedRole = 'PLATFORM_ADMIN';
-      } else if (cleanEmail.includes('admin')) {
+      } else if (cleanEmail.includes('admin') || cleanEmail.includes('bello')) {
         resolvedRole = 'HOSPITAL_ADMIN';
       }
     }
 
     const preset = PRESET_ACCOUNTS[resolvedRole] || PRESET_ACCOUNTS.TRIAGE_OFFICER;
-    const authenticatedUser: AuthUser = {
+    let authenticatedUser: AuthUser = {
       ...preset,
       email: cleanEmail || preset.email,
     };
+
+    // Attempt real backend authentication
+    try {
+      const authRes = await authApi.login(authenticatedUser.email, password || 'Password123!');
+      if (authRes?.accessToken) {
+        localStorage.setItem('mediflow_auth_token', authRes.accessToken);
+        if (authRes.user) {
+          authenticatedUser = {
+            id: authRes.user.id,
+            name: authRes.user.name,
+            email: authRes.user.email,
+            role: authRes.user.role as UserRole,
+            roleLabel: preset.roleLabel,
+            title: authRes.user.title || preset.title,
+            facilityId: authRes.user.facilityId || preset.facilityId,
+          };
+          resolvedRole = authenticatedUser.role;
+        }
+      }
+    } catch (err) {
+      console.warn('Backend login attempt fell back to offline/preset session:', err);
+    }
 
     setUser(authenticatedUser);
     setRoleState(resolvedRole);
@@ -184,17 +209,43 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setUser(null);
     try {
       localStorage.removeItem('mediflow_auth_session');
+      localStorage.removeItem('mediflow_auth_token');
     } catch {
       // Ignored
     }
   };
 
-  const setRole = (newRole: UserRole) => {
+  const setRole = async (newRole: UserRole) => {
     const preset = PRESET_ACCOUNTS[newRole] || PRESET_ACCOUNTS.TRIAGE_OFFICER;
-    setUser(preset);
-    setRoleState(newRole);
+    let authUser: AuthUser = preset;
+
     try {
-      localStorage.setItem('mediflow_auth_session', JSON.stringify(preset));
+      const authRes = await authApi.login(preset.email, 'Password123!');
+      if (authRes?.accessToken) {
+        localStorage.setItem('mediflow_auth_token', authRes.accessToken);
+        if (authRes.user) {
+          authUser = {
+            id: authRes.user.id,
+            name: authRes.user.name,
+            email: authRes.user.email,
+            role: authRes.user.role as UserRole,
+            roleLabel: preset.roleLabel,
+            title: authRes.user.title || preset.title,
+            facilityId: authRes.user.facilityId || preset.facilityId,
+          };
+        }
+      }
+    } catch (err) {
+      console.warn('SetRole backend token acquisition fell back to preset:', err);
+    }
+
+    setUser(authUser);
+    setRoleState(newRole);
+    const matchedFacility = DEMO_FACILITIES.find((f) => f.id === authUser.facilityId) || DEMO_FACILITIES[0];
+    setFacilityState(matchedFacility);
+
+    try {
+      localStorage.setItem('mediflow_auth_session', JSON.stringify(authUser));
     } catch {
       // Ignored
     }

@@ -4,6 +4,7 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { AuditService } from '../audit/audit.service';
 import { CreateReservationDto } from './dto/create-reservation.dto';
 import { UpdateReservationDto } from './dto/update-reservation.dto';
 import { ReservationStatus } from '@prisma/client';
@@ -15,9 +16,12 @@ const VALID_TRANSITIONS: Record<string, string[]> = {
 
 @Injectable()
 export class ReservationsService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private auditService: AuditService,
+  ) {}
 
-  async create(dto: CreateReservationDto) {
+  async create(dto: CreateReservationDto, user?: any) {
     // Validate facility exists
     const facility = await this.prisma.facility.findUnique({
       where: { id: dto.facilityId },
@@ -49,28 +53,44 @@ export class ReservationsService {
 
     const reservation = await this.prisma.reservation.create({
       data: {
-        prescriptionId: dto.prescriptionId,
-        prescriptionItemId: dto.prescriptionItemId,
+        prescriptionId: dto.prescriptionId ?? null,
+        prescriptionItemId: dto.prescriptionItemId ?? null,
         facilityId: dto.facilityId,
         medicineId: dto.medicineId,
         patientId: dto.patientId,
-        status: 'PENDING',
+        status: ReservationStatus.PENDING,
         requestedAt,
         expiresAt,
       },
       include: {
         facility: { include: { pharmacyProfile: true } },
         medicine: true,
+        patient: true,
       },
     });
 
-    // Business Rule: Do NOT deduct inventory on PENDING creation — only on FULFILLED
+    await this.auditService.log({
+      userId: user?.id,
+      userEmail: user?.email,
+      userRole: user?.role,
+      action: 'RESERVATION_CREATED',
+      entityType: 'Reservation',
+      entityId: reservation.id,
+      facilityId: dto.facilityId,
+      details: {
+        medicineName: medicine.genericName,
+        pharmacyName: facility.name,
+        patientId: dto.patientId,
+      },
+    });
+
     return reservation;
   }
 
-  async updateStatus(id: string, dto: UpdateReservationDto) {
+  async updateStatus(id: string, dto: UpdateReservationDto, user?: any) {
     const reservation = await this.prisma.reservation.findUnique({
       where: { id },
+      include: { facility: true, medicine: true },
     });
 
     if (!reservation) {
@@ -135,6 +155,29 @@ export class ReservationsService {
       include: {
         facility: { include: { pharmacyProfile: true } },
         medicine: true,
+        patient: true,
+      },
+    });
+
+    const actionMap: Record<string, string> = {
+      CONFIRMED: 'RESERVATION_CONFIRMED',
+      REJECTED: 'RESERVATION_REJECTED',
+      FULFILLED: 'RESERVATION_FULFILLED',
+      CANCELLED: 'RESERVATION_CANCELLED',
+    };
+
+    await this.auditService.log({
+      userId: user?.id,
+      userEmail: user?.email,
+      userRole: user?.role,
+      action: actionMap[nextStatus] || 'RESERVATION_STATUS_UPDATED',
+      entityType: 'Reservation',
+      entityId: id,
+      facilityId: reservation.facilityId,
+      details: {
+        previousStatus: currentStatus,
+        newStatus: nextStatus,
+        medicineName: reservation.medicine.genericName,
       },
     });
 
@@ -147,6 +190,7 @@ export class ReservationsService {
       include: {
         facility: { include: { pharmacyProfile: true } },
         medicine: true,
+        patient: true,
       },
     });
 
@@ -159,5 +203,26 @@ export class ReservationsService {
     }
 
     return reservation;
+  }
+
+  async findAll(query: {
+    facilityId?: string;
+    patientId?: string;
+    status?: ReservationStatus;
+  } = {}) {
+    const where: any = {};
+    if (query.facilityId) where.facilityId = query.facilityId;
+    if (query.patientId) where.patientId = query.patientId;
+    if (query.status) where.status = query.status;
+
+    return this.prisma.reservation.findMany({
+      where,
+      orderBy: { requestedAt: 'desc' },
+      include: {
+        facility: { include: { pharmacyProfile: true } },
+        medicine: true,
+        patient: true,
+      },
+    });
   }
 }

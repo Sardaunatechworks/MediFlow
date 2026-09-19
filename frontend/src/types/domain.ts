@@ -182,8 +182,8 @@ export interface PharmacyInventory {
 
 export interface Reservation {
   id: string;
-  prescriptionId: string;
-  prescriptionItemId: string;
+  prescriptionId?: string | null;
+  prescriptionItemId?: string | null;
   facilityId: string;
   medicineId: string;
   patientId: string;
@@ -193,14 +193,11 @@ export interface Reservation {
   updatedAt?: string;
   facility?: Facility;
   medicine?: Medicine;
+  patient?: Patient;
 }
 
-// -------------------------------------------------------------
-// Explicit Prescription MVP Bridge Interface
-// (Isolates client prescription state until backend adds module)
-// -------------------------------------------------------------
 export interface ClientPrescriptionItem {
-  id: string; // Temporary MVP UUID
+  id: string;
   medicineId: string;
   medicineName: string;
   strength: string;
@@ -216,7 +213,7 @@ export interface ClientPrescriptionItem {
 }
 
 export interface ClientPrescription {
-  id: string; // Temporary MVP UUID
+  id: string;
   encounterId: string;
   patientId: string;
   patientName: string;
@@ -225,4 +222,20 @@ export interface ClientPrescription {
   diagnosisNotes?: string;
   items: ClientPrescriptionItem[];
   status: 'ISSUED' | 'DISPENSED' | 'CANCELLED';
+}
+
+export interface AuditLog {
+  id: string;
+  userId?: string | null;
+  userEmail?: string | null;
+  userRole?: UserRole | null;
+  action: string;
+  entityType: string;
+  entityId?: string | null;
+  details?: any;
+  ipAddress?: string | null;
+  facilityId?: string | null;
+  createdAt: string;
+  user?: { id: string; name: string; email: string; role: string } | null;
+  facility?: { id: string; name: string; type: string } | null;
 }
